@@ -73,3 +73,63 @@ def test_oversized_section_is_split_and_keeps_the_heading_path():
     assert len(chunks) > 1
     assert all(c.symbol == "Big" for c in chunks)
     assert all(len(c.text) <= 500 for c in chunks)
+
+
+FENCED_DOC = """# Tutorial
+
+Intro paragraph.
+
+```Python
+# Create the app
+from fastapi import FastAPI
+
+# Define a path operation
+@app.get("/")
+def read_root():
+    return {"hello": "world"}
+```
+
+Closing paragraph.
+"""
+
+
+def test_comments_inside_a_code_fence_are_not_headings():
+    chunks = chunk_markdown(FENCED_DOC, "docs/tutorial.md")
+    assert symbols(chunks) == ["Tutorial"]
+
+
+def test_fenced_code_stays_in_one_chunk():
+    chunk = chunk_markdown(FENCED_DOC, "docs/tutorial.md")[0]
+    assert "# Create the app" in chunk.text
+    assert "# Define a path operation" in chunk.text
+    assert "Closing paragraph." in chunk.text
+
+
+def test_tilde_fences_are_tracked_too():
+    source = "# Title\n\n~~~python\n# not a heading\n~~~\n\nAfter.\n"
+    assert symbols(chunk_markdown(source, "docs/t.md")) == ["Title"]
+
+
+def test_a_backtick_fence_does_not_close_a_tilde_fence():
+    source = "# Title\n\n~~~\n```\n# still not a heading\n~~~\n\nAfter.\n"
+    assert symbols(chunk_markdown(source, "docs/t.md")) == ["Title"]
+
+
+def test_headings_after_a_closed_fence_still_split():
+    source = "# One\n\n```\n# fake\n```\n\n## Two\n\nBody.\n"
+    assert symbols(chunk_markdown(source, "docs/t.md")) == ["One", "One > Two"]
+
+
+def test_single_oversized_paragraph_is_split_to_the_budget():
+    source = "# Big\n\n" + ("word " * 2000)
+    chunks = chunk_markdown(source, "docs/big.md", max_chars=500)
+    assert len(chunks) > 1
+    assert all(len(c.text) <= 500 for c in chunks)
+    assert all(c.symbol == "Big" for c in chunks)
+
+
+def test_single_oversized_line_is_hard_split():
+    source = "# Big\n\n" + ("x" * 3000)
+    chunks = chunk_markdown(source, "docs/big.md", max_chars=500)
+    assert len(chunks) >= 6
+    assert all(len(c.text) <= 500 for c in chunks)
