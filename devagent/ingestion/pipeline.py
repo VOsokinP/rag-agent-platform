@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from devagent.db.models import Chunk as ChunkRow
@@ -19,7 +20,13 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class IngestResult:
-    """What one ingestion run did."""
+    """What one ingestion run did.
+
+    `files_skipped` lists files that had content but produced no chunks —
+    unreadable or unparseable. A file that is empty (or whitespace-only) is
+    not counted here: legitimately empty files (e.g. `__init__.py`) would
+    otherwise drown out genuine failures.
+    """
 
     files_processed: int = 0
     chunks_written: int = 0
@@ -40,6 +47,15 @@ def chunk_file(path: Path, relative_path: str) -> list[Chunk]:
     if path.suffix == ".md":
         return chunk_markdown(source, relative_path)
     return []
+
+
+def _has_content(path: Path) -> bool:
+    """True if the file holds anything but whitespace."""
+    try:
+        return bool(path.read_text(encoding="utf-8").strip())
+    except (OSError, UnicodeDecodeError):
+        # Unreadable is exactly the case worth reporting.
+        return True
 
 
 def build_rows(
@@ -81,6 +97,23 @@ def _upsert(session: Any, rows: list[dict[str, Any]]) -> None:
     session.execute(statement)
 
 
+def _delete_existing(session: Any, repo: str, file_paths: list[str]) -> None:
+    """Drop the stored chunks for these files so a re-ingest can't leave orphans.
+
+    Upserting alone is not enough: the conflict key includes the line range, so
+    an edit that shifts a definition writes a new row and silently strands the
+    old one, which would keep surfacing in retrieval describing code that no
+    longer exists.
+    """
+    if not file_paths:
+        return
+    session.execute(
+        delete(ChunkRow).where(
+            ChunkRow.repo == repo, ChunkRow.file_path.in_(file_paths)
+        )
+    )
+
+
 def ingest(
     repo: str,
     repo_dir: Path,
@@ -90,22 +123,29 @@ def ingest(
 ) -> IngestResult:
     """Chunk, embed, and upsert every included file in an existing checkout.
 
-    A file that yields no chunks is reported in `files_skipped`; an embedding
-    batch that fails is counted and skipped. Neither aborts the run — losing a
-    whole ingest to one unparseable file or one flaky API call is the failure
-    mode this guards against.
+    A file with content that yields no chunks is reported in `files_skipped`;
+    an embedding batch that fails is counted and skipped. Neither aborts the
+    run — losing a whole ingest to one unparseable file or one flaky API call
+    is the failure mode this guards against. Every processed file's existing
+    rows are deleted before new ones are written, so a re-ingest can't leave
+    stale rows describing code that no longer exists.
     """
     all_chunks: list[Chunk] = []
     skipped: list[str] = []
+    processed_paths: list[str] = []
     files_processed = 0
 
     for absolute, relative in iter_source_files(repo_dir):
         files_processed += 1
+        processed_paths.append(relative)
         chunks = chunk_file(absolute, relative)
         if not chunks:
-            skipped.append(relative)
+            if _has_content(absolute):
+                skipped.append(relative)
             continue
         all_chunks.extend(chunks)
+
+    _delete_existing(session, repo, processed_paths)
 
     written = 0
     batches_failed = 0

@@ -60,7 +60,16 @@ def test_ingest_writes_chunks(mini_repo):
     result = ingest("fastapi/fastapi", mini_repo, FakeProvider(dimensions=8), session)
     assert isinstance(result, IngestResult)
     assert result.chunks_written > 0
-    assert session.statements, "expected at least one upsert statement"
+    # One delete + at least one upsert.
+    assert len(session.statements) >= 2
+
+
+def test_ingest_deletes_existing_rows_before_writing(mini_repo):
+    """A re-ingest must clear a file's old chunks, not just upsert over some."""
+    session = RecordingSession()
+    ingest("fastapi/fastapi", mini_repo, FakeProvider(dimensions=8), session)
+    compiled = [str(statement) for statement in session.statements]
+    assert any(text.startswith("DELETE") for text in compiled), compiled
 
 
 def test_ingest_reports_skipped_unparseable_files(mini_repo):
@@ -135,6 +144,30 @@ def test_build_rows_rejects_a_length_mismatch():
 
 
 def test_ingest_survives_a_failing_embedding_batch(mini_repo):
+    """One bad batch must not cost the whole run — later batches still land."""
+
+    class FailsFirstBatchProvider(FakeProvider):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.calls = 0
+
+        def embed(self, texts):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("API is down")
+            return super().embed(texts)
+
+    provider = FailsFirstBatchProvider(dimensions=8)
+    session = RecordingSession()
+    result = ingest("fastapi/fastapi", mini_repo, provider, session, batch_size=1)
+
+    assert provider.calls > 1, "fixture must produce more than one batch"
+    assert result.batches_failed == 1
+    assert result.chunks_written == provider.calls - 1
+    assert result.chunks_written > 0, "a later batch must still be persisted"
+
+
+def test_ingest_reports_zero_written_when_every_batch_fails(mini_repo):
     class FailingProvider(FakeProvider):
         def embed(self, texts):
             raise RuntimeError("API is down")
