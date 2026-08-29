@@ -22,7 +22,14 @@ class FakeProvider:
         return self.answer
 
     def _vector(self, text: str) -> list[float]:
+        """Derive a stable pseudo-vector from the text.
+
+        Components span [-1, 1] rather than [0, 1] deliberately: vectors confined
+        to the positive orthant all point roughly the same direction, which
+        squeezes cosine similarity into a narrow band and makes ranking-sensitive
+        tests pass or fail on hash noise instead of on the code under test.
+        """
         digest = hashlib.sha256(text.encode("utf-8")).digest()
         # Repeat the digest until it covers the requested dimensionality.
         raw = (digest * (self.dimensions // len(digest) + 1))[: self.dimensions]
-        return [byte / 255.0 for byte in raw]
+        return [byte / 127.5 - 1.0 for byte in raw]
