@@ -75,3 +75,44 @@ def test_unparseable_file_returns_empty_list():
 
 def test_empty_file_returns_no_chunks():
     assert chunk_python_source(load("empty.py"), "pkg/empty.py") == []
+
+
+@pytest.fixture
+def decorated_chunks():
+    return chunk_python_source(load("decorated.py"), "pkg/decorated.py")
+
+
+def test_function_chunk_includes_its_decorators(decorated_chunks):
+    handler = next(c for c in decorated_chunks if c.symbol == "handler")
+    assert '@app.get("/foo")' in handler.text
+    assert "@functools.lru_cache" in handler.text
+    assert "def handler(x: int) -> int:" in handler.text
+
+
+def test_class_chunk_includes_its_decorator(decorated_chunks):
+    decorated = next(c for c in decorated_chunks if c.symbol == "Decorated")
+    assert "@functools.total_ordering" in decorated.text
+
+
+def test_method_chunk_includes_its_decorator(decorated_chunks):
+    value = next(c for c in decorated_chunks if c.symbol == "Decorated.value")
+    assert "@property" in value.text
+
+
+def test_decorators_do_not_leak_into_the_module_chunk(decorated_chunks):
+    module_chunk = next(c for c in decorated_chunks if c.symbol == "<module>")
+    assert "@app.get" not in module_chunk.text
+    assert "@functools.total_ordering" not in module_chunk.text
+    assert "@property" not in module_chunk.text
+
+
+def test_decorated_chunk_start_line_points_at_the_first_decorator(decorated_chunks):
+    handler = next(c for c in decorated_chunks if c.symbol == "handler")
+    lines = load("decorated.py").splitlines()
+    assert lines[handler.start_line - 1].strip() == '@app.get("/foo")'
+
+
+def test_module_chunk_range_covers_only_retained_lines(decorated_chunks):
+    module_chunk = next(c for c in decorated_chunks if c.symbol == "<module>")
+    source_lines = load("decorated.py").splitlines()
+    assert module_chunk.end_line < len(source_lines)
