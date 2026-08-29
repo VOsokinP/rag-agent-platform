@@ -64,12 +64,57 @@ def test_ingest_writes_chunks(mini_repo):
     assert len(session.statements) >= 2
 
 
-def test_ingest_deletes_existing_rows_before_writing(mini_repo):
-    """A re-ingest must clear a file's old chunks, not just upsert over some."""
+def test_ingest_deletes_a_files_rows_before_writing_its_chunks(mini_repo):
+    """A re-ingest must clear a file's old chunks before writing new ones."""
     session = RecordingSession()
     ingest("fastapi/fastapi", mini_repo, FakeProvider(dimensions=8), session)
-    compiled = [str(statement) for statement in session.statements]
-    assert any(text.startswith("DELETE") for text in compiled), compiled
+    kinds = [str(statement).split()[0] for statement in session.statements]
+    assert "DELETE" in kinds
+    assert kinds.index("DELETE") < len(kinds) - 1, "a DELETE must precede an upsert"
+
+
+def test_total_embedding_failure_does_not_delete_existing_rows(mini_repo):
+    """The index must survive a run where the embeddings API is unavailable.
+
+    ingest() reports batch failures instead of raising, so session_scope commits
+    — a delete issued before embedding would be committed with no replacement.
+    """
+
+    class DeadProvider(FakeProvider):
+        def embed(self, texts):
+            raise RuntimeError("API is down")
+
+    session = RecordingSession()
+    result = ingest("fastapi/fastapi", mini_repo, DeadProvider(dimensions=8), session)
+
+    assert result.chunks_written == 0
+    assert result.batches_failed > 0
+    deletes = [s for s in session.statements if str(s).startswith("DELETE")]
+    for statement in deletes:
+        params = statement.compile().params
+        targets = [v for v in params.values() if isinstance(v, str)]
+        assert "fastapi/routing.py" not in targets, (
+            "a file with chunks must not be cleared when its batch never embedded"
+        )
+
+
+def test_a_file_spanning_batches_is_cleared_only_once(tmp_path):
+    """The second batch for a file must not delete what the first just wrote."""
+    (tmp_path / "fastapi").mkdir()
+    (tmp_path / "fastapi" / "many.py").write_text(
+        "\n\n".join(f"def f{i}():\n    return {i}" for i in range(6)),
+        encoding="utf-8",
+    )
+    session = RecordingSession()
+    ingest("r", tmp_path, FakeProvider(dimensions=8), session, batch_size=2)
+
+    cleared_counts = [
+        str(s) for s in session.statements if str(s).startswith("DELETE")
+    ]
+    assert len(cleared_counts) <= 2, (
+        f"expected at most one clearing delete plus the empty-file delete, got "
+        f"{len(cleared_counts)}"
+    )
 
 
 def test_ingest_reports_skipped_unparseable_files(mini_repo):

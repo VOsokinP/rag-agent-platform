@@ -126,26 +126,36 @@ def ingest(
     A file with content that yields no chunks is reported in `files_skipped`;
     an embedding batch that fails is counted and skipped. Neither aborts the
     run — losing a whole ingest to one unparseable file or one flaky API call
-    is the failure mode this guards against. Every processed file's existing
-    rows are deleted before new ones are written, so a re-ingest can't leave
-    stale rows describing code that no longer exists.
+    is the failure mode this guards against.
+
+    A file's existing rows are cleared exactly once: a file that now yields no
+    chunks is cleared upfront (its stored rows are stale regardless of
+    embedding), while a file that yields chunks is cleared only immediately
+    before the first successfully embedded batch containing one of its
+    chunks. Clearing everything upfront would let a dead embeddings API wipe
+    the whole index and commit that deletion, since this function reports
+    batch failures instead of raising — `session_scope` would take its
+    success branch on a run that wrote nothing.
     """
     all_chunks: list[Chunk] = []
     skipped: list[str] = []
-    processed_paths: list[str] = []
+    empty_paths: list[str] = []
     files_processed = 0
 
     for absolute, relative in iter_source_files(repo_dir):
         files_processed += 1
-        processed_paths.append(relative)
         chunks = chunk_file(absolute, relative)
         if not chunks:
+            empty_paths.append(relative)
             if _has_content(absolute):
                 skipped.append(relative)
             continue
         all_chunks.extend(chunks)
 
-    _delete_existing(session, repo, processed_paths)
+    # A file that now yields nothing has stale stored rows regardless of whether
+    # embedding succeeds, so it is always safe to clear.
+    _delete_existing(session, repo, empty_paths)
+    cleared: set[str] = set(empty_paths)
 
     written = 0
     batches_failed = 0
@@ -162,6 +172,12 @@ def ingest(
             continue
 
         rows = build_rows(batch, vectors, repo)
+        # Clear a file's previous rows only once we actually have replacements in
+        # hand. Deleting up front would let a dead embeddings API wipe the index
+        # and commit, since ingest() reports batch failures rather than raising.
+        pending = sorted({chunk.file_path for chunk in batch} - cleared)
+        _delete_existing(session, repo, pending)
+        cleared.update(pending)
         _upsert(session, rows)
         written += len(rows)
 
