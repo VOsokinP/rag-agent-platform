@@ -82,6 +82,19 @@ it will spend a small amount of real money on embeddings (a few cents at
   appropriate for a corpus you trust. It matters more once the agent gains tools that
   can act on the codebase (Milestone 3), where prompt-injected content could otherwise
   influence tool calls.
+- **Methods are embedded twice, and that is deliberate.** A class produces one chunk
+  for the whole class *and* one chunk per method, so a method's source is embedded both
+  standalone and inside its class. Measured on the FastAPI corpus that is 1,224,827
+  embedded characters against 766,214 source characters — roughly a 1.6x cost
+  multiplier. It is kept because class-level context genuinely helps retrieval: a
+  question about a class is answered better by a chunk that shows the class as a whole
+  than by an arbitrary one of its methods. Chunk-size capping reduces this for large
+  classes, which now contribute a header chunk (decorators, signature, docstring)
+  instead of a full body.
+- **Chunks are capped at 8,000 characters.** `text-embedding-3-small` rejects the entire
+  request if any single input exceeds 8,192 tokens, so one oversized chunk would
+  silently discard its whole batch. Oversized functions and Markdown sections are split;
+  oversized classes become header chunks.
 - **Re-ingestion is not atomic per repository, only per file.** A file's previously
   stored chunks are deleted only after its replacement chunks have been embedded
   successfully. If an embedding batch fails, the affected file's *older* chunks are
