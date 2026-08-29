@@ -77,13 +77,34 @@ def build_rows(
     ]
 
 
-def _upsert(session: Any, rows: list[dict[str, Any]]) -> None:
+def _dedupe_by_conflict_key(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep one row per uq_chunk_location key.
+
+    Postgres refuses an ON CONFLICT DO UPDATE whose statement contains the same
+    conflict key twice ("cannot affect row a second time"), which would abort the
+    whole ingest. Chunkers are not supposed to emit colliding keys, but this makes
+    the invariant enforced rather than assumed.
+    """
+    unique: dict[tuple[str, str, int, int], dict[str, Any]] = {}
+    for row in rows:
+        key = (row["repo"], row["file_path"], row["start_line"], row["end_line"])
+        unique[key] = row
+    return list(unique.values())
+
+
+def _upsert(session: Any, rows: list[dict[str, Any]]) -> int:
     """Insert rows, updating in place when the chunk location already exists.
+
+    Returns the number of rows actually sent, which is the deduplicated count —
+    so a caller reporting "chunks written" never claims more than it wrote.
 
     `session.merge()` would not work here: it matches on primary key, which is
     None for new rows, so it always inserts and a re-ingest would violate
     `uq_chunk_location` instead of refreshing the row.
     """
+    rows = _dedupe_by_conflict_key(rows)
+    if not rows:
+        return 0
     statement = pg_insert(ChunkRow).values(rows)
     statement = statement.on_conflict_do_update(
         constraint="uq_chunk_location",
@@ -95,6 +116,7 @@ def _upsert(session: Any, rows: list[dict[str, Any]]) -> None:
         },
     )
     session.execute(statement)
+    return len(rows)
 
 
 def _delete_existing(session: Any, repo: str, file_paths: list[str]) -> None:
@@ -178,8 +200,7 @@ def ingest(
         pending = sorted({chunk.file_path for chunk in batch} - cleared)
         _delete_existing(session, repo, pending)
         cleared.update(pending)
-        _upsert(session, rows)
-        written += len(rows)
+        written += _upsert(session, rows)
 
     return IngestResult(
         files_processed=files_processed,

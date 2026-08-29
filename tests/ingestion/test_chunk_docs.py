@@ -133,3 +133,18 @@ def test_single_oversized_line_is_hard_split():
     chunks = chunk_markdown(source, "docs/big.md", max_chars=500)
     assert len(chunks) >= 6
     assert all(len(c.text) <= 500 for c in chunks)
+
+
+def test_long_lines_do_not_produce_colliding_line_ranges():
+    """(start_line, end_line) is a DB uniqueness key; hard-split pieces must differ."""
+    source = "# Title\n\n" + ("x" * 9000) + "\n\n## Next\n\nBody.\n"
+    chunks = chunk_markdown(source, "docs/wide.md", max_chars=4000)
+    ranges = [(c.start_line, c.end_line) for c in chunks]
+    assert len(ranges) == len(set(ranges)), ranges
+
+
+def test_chunk_line_ranges_stay_within_the_file():
+    source = "# Title\n\n" + ("x" * 9000) + "\n\n## Next\n\nBody.\n"
+    total = len(source.split("\n"))
+    for chunk in chunk_markdown(source, "docs/wide.md", max_chars=4000):
+        assert chunk.end_line <= total, (chunk.symbol, chunk.start_line, chunk.end_line)

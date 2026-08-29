@@ -230,3 +230,17 @@ def test_ingest_counts_files_processed(mini_repo):
     )
     # routing.py, broken.py, index.md
     assert result.files_processed == 3
+
+
+def test_upsert_deduplicates_colliding_conflict_keys():
+    """Postgres aborts a statement containing the same conflict key twice."""
+    from devagent.ingestion.pipeline import _dedupe_by_conflict_key
+
+    rows = [
+        {"repo": "r", "file_path": "a.md", "start_line": 1, "end_line": 2, "text": "first"},
+        {"repo": "r", "file_path": "a.md", "start_line": 1, "end_line": 2, "text": "second"},
+        {"repo": "r", "file_path": "a.md", "start_line": 3, "end_line": 4, "text": "third"},
+    ]
+    deduped = _dedupe_by_conflict_key(rows)
+    assert len(deduped) == 2
+    assert [row["text"] for row in deduped] == ["second", "third"]

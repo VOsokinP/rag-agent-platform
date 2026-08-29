@@ -9,7 +9,8 @@ fenced Python, where that mistake would fabricate sections that don't exist.
 Sections longer than `max_chars` are split on paragraph boundaries, then line
 boundaries, and finally on character count. Line numbers for a chunk produced by
 that last resort are approximate, since the chunk is then a fragment of a single
-source line.
+source line; they are clamped to the section's own line span so an approximation
+can never point into a different section or past the end of the file.
 """
 
 import re
@@ -26,27 +27,78 @@ def chunk_markdown(source: str, file_path: str, max_chars: int = 4000) -> list[C
         return []
 
     chunks: list[Chunk] = []
-    for symbol, start_line, body in _sections(source):
+    taken: set[tuple[int, int]] = set()
+    for symbol, start_line, last_line, body in _sections(source):
         for text, offset in _split_oversized(body, max_chars):
             if not text.strip():
                 continue
+            # Clamp to the section's own line span. The offsets for an oversized
+            # section are approximate — hard-splitting one very long line yields
+            # several pieces that all live on that single source line — so without
+            # a clamp the offsets run past the section, land on another section's
+            # lines, and two chunks end up with the same (start_line, end_line).
+            # That pair is the uq_chunk_location key, and Postgres aborts an
+            # ON CONFLICT statement that names the same key twice.
+            start = min(start_line + offset, last_line)
+            end = min(start + text.count("\n"), last_line)
+            location = _free_range(taken, start, end, start_line, last_line)
+            if location is None:
+                # The section has no distinct range left to give. Dropping the
+                # overflow of an already-truncated long line beats emitting a
+                # duplicate key that would abort the whole ingest.
+                continue
+            taken.add(location)
             chunks.append(
                 Chunk(
                     file_path=file_path,
                     symbol=symbol,
                     kind=DOC,
-                    start_line=start_line + offset,
-                    end_line=start_line + offset + text.count("\n"),
+                    start_line=location[0],
+                    end_line=location[1],
                     text=text,
                 )
             )
     return chunks
 
 
-def _sections(source: str) -> list[tuple[str | None, int, str]]:
-    """Yield (heading path, 1-based start line, section text) for each section."""
+def _free_range(
+    taken: set[tuple[int, int]],
+    start: int,
+    end: int,
+    section_start: int,
+    section_end: int,
+) -> tuple[int, int] | None:
+    """Find an unused (start_line, end_line) pair inside the section.
+
+    `(repo, file_path, start_line, end_line)` is `uq_chunk_location`, so two
+    chunks of one file may not share a pair. Ordinary chunks never collide and
+    keep their exact range — the first candidate tried is the one passed in.
+    Collisions only arise between hard-split fragments of a single line longer
+    than `max_chars`, whose line numbers the module docstring already describes
+    as approximate. For those, the end is widened first (the content really does
+    begin at `start`), then the start is walked back toward the section heading.
+    Returns None when the section has no free pair left.
+    """
+    if (start, end) not in taken:
+        return (start, end)
+    for candidate_end in range(end + 1, section_end + 1):
+        if (start, candidate_end) not in taken:
+            return (start, candidate_end)
+    for candidate_start in range(start - 1, section_start - 1, -1):
+        for candidate_end in range(section_end, candidate_start - 1, -1):
+            if (candidate_start, candidate_end) not in taken:
+                return (candidate_start, candidate_end)
+    return None
+
+def _sections(source: str) -> list[tuple[str | None, int, int, str]]:
+    """Yield (heading path, start line, last line, text) for each section.
+
+    Both line numbers are 1-based and refer to the source. The last line lets a
+    caller clamp an oversized section's split pieces to the lines the section
+    actually occupies.
+    """
     lines = source.splitlines()
-    sections: list[tuple[str | None, int, str]] = []
+    sections: list[tuple[str | None, int, int, str]] = []
     path: list[str] = []
     current: list[str] = []
     current_symbol: str | None = None
@@ -55,7 +107,8 @@ def _sections(source: str) -> list[tuple[str | None, int, str]]:
     def flush() -> None:
         text = "\n".join(current).strip()
         if text:
-            sections.append((current_symbol, current_start, text))
+            last = current_start + len(current) - 1
+            sections.append((current_symbol, current_start, last, text))
 
     in_fence = False
     fence_char = ""
