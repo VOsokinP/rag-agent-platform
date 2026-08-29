@@ -29,6 +29,7 @@ def fake_repo(tmp_path: Path) -> Path:
     (tmp_path / "scripts" / "build.py").write_text("pass", encoding="utf-8")
 
     (tmp_path / "README.md").write_text("# Readme", encoding="utf-8")
+    (tmp_path / ".git").mkdir()
     return tmp_path
 
 
@@ -78,3 +79,29 @@ def test_relative_paths_use_forward_slashes(fake_repo):
 def test_ensure_repo_returns_existing_checkout_without_cloning(fake_repo):
     # No network: an existing directory is returned as-is.
     assert ensure_repo("https://example.invalid/nope", fake_repo) == fake_repo
+
+
+def test_ensure_repo_rejects_a_directory_that_is_not_a_checkout(tmp_path):
+    partial = tmp_path / "partial"
+    partial.mkdir()
+    (partial / "leftover.txt").write_text("from an interrupted clone", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="not a git checkout"):
+        ensure_repo("https://example.invalid/nope", partial)
+
+
+def test_ensure_repo_accepts_a_directory_with_a_git_dir(tmp_path):
+    checkout = tmp_path / "checkout"
+    (checkout / ".git").mkdir(parents=True)
+    assert ensure_repo("https://example.invalid/nope", checkout) == checkout
+
+
+def test_duplicate_physical_files_are_yielded_once(fake_repo, monkeypatch):
+    """A path reachable twice must not be ingested twice."""
+    real = fake_repo / "fastapi" / "routing.py"
+    seen_paths = [absolute for absolute, _ in iter_source_files(fake_repo)]
+    assert seen_paths.count(real.resolve()) == 1
+
+
+def test_relative_label_matches_the_yielded_absolute_path(fake_repo):
+    for absolute, relative in iter_source_files(fake_repo):
+        assert absolute == (fake_repo.resolve() / relative)
