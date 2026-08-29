@@ -1,8 +1,20 @@
-"""Test-wide fixtures."""
+"""Test-wide environment setup and fixtures.
 
-import pytest
+`devagent.db.models` reads settings at import time to size the embedding column,
+so the required settings must exist before any test imports it. These are dummy
+values; no unit test connects to a real database or API.
+"""
 
-from devagent.config import get_settings
+import os
+
+os.environ.setdefault(
+    "DATABASE_URL", "postgresql+psycopg://devagent:devagent@localhost:5433/devagent"
+)
+os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-a-real-key")
+
+import pytest  # noqa: E402
+
+from devagent.config import get_settings  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
