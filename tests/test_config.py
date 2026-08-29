@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from devagent.config import Settings
+from devagent.config import Settings, get_settings
 
 
 def test_settings_reads_from_env(monkeypatch):
@@ -26,3 +26,15 @@ def test_repo_dir_is_a_path(monkeypatch):
     settings = Settings()
     assert isinstance(settings.repo_dir, Path)
     assert settings.repo_url == "https://github.com/fastapi/fastapi"
+
+
+def test_get_settings_returns_settings(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5433/db")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    assert get_settings().openai_api_key == "sk-test"
+
+
+def test_get_settings_is_cached(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5433/db")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    assert get_settings() is get_settings()
