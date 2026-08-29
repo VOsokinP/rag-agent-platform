@@ -107,6 +107,31 @@ def test_query_rejects_an_out_of_range_k(client):
     assert client.post("/query", json={"question": "q", "k": 101}).status_code == 422
 
 
+def test_ingest_maps_a_clone_failure_to_502(monkeypatch, client):
+    def boom(repo_url, repo_dir):
+        raise RuntimeError("git clone of https://example.invalid/x failed: fatal: nope")
+
+    monkeypatch.setattr("devagent.api.main.ensure_repo", boom)
+    response = client.post("/ingest", json={})
+    assert response.status_code == 502
+    assert "fatal: nope" in response.json()["detail"], (
+        "git's own error text must survive to the caller"
+    )
+
+
+def test_ingest_maps_a_partial_checkout_to_502(monkeypatch, client):
+    def boom(repo_url, repo_dir):
+        raise RuntimeError(
+            "data/repos/fastapi exists but is not a git checkout (no .git). "
+            "It may be a partial clone from an interrupted run. Remove it and try again."
+        )
+
+    monkeypatch.setattr("devagent.api.main.ensure_repo", boom)
+    response = client.post("/ingest", json={})
+    assert response.status_code == 502
+    assert "not a git checkout" in response.json()["detail"]
+
+
 @pytest.mark.parametrize(
     ("url", "expected"),
     [

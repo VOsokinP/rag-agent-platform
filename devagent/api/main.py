@@ -66,7 +66,18 @@ def ingest_endpoint(
     repo_url = request.repo_url or settings.repo_url
     repo_name = request.repo or _repo_name_from_url(repo_url)
 
-    repo_dir = ensure_repo(repo_url, settings.repo_dir)
+    try:
+        repo_dir = ensure_repo(repo_url, settings.repo_dir)
+    except RuntimeError as exc:
+        # ensure_repo raises RuntimeError for the two failures an operator can
+        # actually act on: a partial checkout from an interrupted clone, and a
+        # clone failure carrying git's own stderr. Losing that text to a generic
+        # 500 would waste the work Task 6 did to make it actionable.
+        #
+        # Note: the message can echo the clone URL. That is fine for a
+        # single-operator local tool, but if DevAgent ever grew auth or accepted
+        # arbitrary URLs with embedded credentials, this would need redaction.
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     result = ingest(repo_name, repo_dir, provider, session)
 
     return IngestResponse(
