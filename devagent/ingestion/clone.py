@@ -13,6 +13,15 @@ INCLUDE_DOCS = "docs/en/docs/**/*.md"
 _INCLUDE_PATTERNS = (INCLUDE_CODE, INCLUDE_DOCS)
 
 
+def _empty_directory(directory: Path) -> None:
+    """Remove a directory's contents, leaving the directory itself in place."""
+    for child in directory.iterdir():
+        if child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child, ignore_errors=True)
+        else:
+            child.unlink(missing_ok=True)
+
+
 def ensure_repo(repo_url: str, repo_dir: Path) -> Path:
     """Return a local checkout of the repo, shallow-cloning it if absent.
 
@@ -36,6 +45,7 @@ def ensure_repo(repo_url: str, repo_dir: Path) -> Path:
         )
 
     repo_dir.parent.mkdir(parents=True, exist_ok=True)
+    existed_before = repo_dir.exists()
     logger.info("Cloning %s into %s", repo_url, repo_dir)
     try:
         subprocess.run(
@@ -45,8 +55,12 @@ def ensure_repo(repo_url: str, repo_dir: Path) -> Path:
             text=True,
         )
     except subprocess.CalledProcessError as exc:
-        # Don't leave a partial checkout that the next call would accept.
-        shutil.rmtree(repo_dir, ignore_errors=True)
+        # Clean up the partial clone so the next call doesn't accept it, but
+        # never delete a directory the caller created — only what we put in it.
+        if existed_before:
+            _empty_directory(repo_dir)
+        else:
+            shutil.rmtree(repo_dir, ignore_errors=True)
         stderr = (exc.stderr or "").strip()
         raise RuntimeError(f"git clone of {repo_url} failed: {stderr}") from exc
 

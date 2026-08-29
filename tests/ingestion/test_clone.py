@@ -105,3 +105,18 @@ def test_duplicate_physical_files_are_yielded_once(fake_repo, monkeypatch):
 def test_relative_label_matches_the_yielded_absolute_path(fake_repo):
     for absolute, relative in iter_source_files(fake_repo):
         assert absolute == (fake_repo.resolve() / relative)
+
+
+def test_failed_clone_preserves_a_directory_the_caller_created(tmp_path):
+    target = tmp_path / "preexisting"
+    target.mkdir()
+    with pytest.raises(RuntimeError):
+        ensure_repo(str(tmp_path / "definitely-not-a-repo"), target)
+    assert target.exists(), "must not delete a directory we did not create"
+
+
+def test_failed_clone_removes_a_directory_it_created(tmp_path):
+    target = tmp_path / "fresh"
+    with pytest.raises(RuntimeError):
+        ensure_repo(str(tmp_path / "definitely-not-a-repo"), target)
+    assert not target.exists(), "a partial clone we created must not be left behind"
