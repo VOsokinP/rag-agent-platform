@@ -63,7 +63,7 @@ def ingest_endpoint(
 ) -> IngestResponse:
     """Clone the target repo if needed, then chunk, embed, and store it."""
     settings = get_settings()
-    repo_url = request.repo_url or settings.repo_url
+    repo_url = settings.repo_url
     repo_name = request.repo or _repo_name_from_url(repo_url)
 
     try:
@@ -79,6 +79,18 @@ def ingest_endpoint(
         # arbitrary URLs with embedded credentials, this would need redaction.
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     result = ingest(repo_name, repo_dir, provider, session)
+
+    # Commit inside the request path, not in the dependency's exit code. An
+    # exception raised while unwinding a `yield` dependency cannot change a
+    # response that has already been produced, so a failed commit would return
+    # 200 with a chunks_written count for rows that were rolled back.
+    try:
+        session.commit()
+    except Exception as exc:  # noqa: BLE001 - any commit failure must not report success
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ingestion completed but the transaction failed to commit: {exc}",
+        ) from exc
 
     return IngestResponse(
         repo=repo_name,

@@ -4,9 +4,15 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class IngestRequest(BaseModel):
-    """Optionally override which repository to ingest."""
+    """Optionally override the label recorded on the ingested rows.
 
-    repo_url: str | None = None
+    Which repository is ingested is configured by `REPO_URL` in the environment,
+    not per request. A per-request URL would be a lie: the checkout directory
+    comes from settings and `ensure_repo` reuses any directory that already has a
+    `.git`, so pointing this at a second repository would ingest the first one's
+    files while labelling the rows with the second one's name.
+    """
+
     repo: str | None = Field(
         default=None, description="Name recorded on each row, e.g. 'fastapi/fastapi'."
     )

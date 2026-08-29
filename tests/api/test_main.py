@@ -15,19 +15,20 @@ class StubResult:
 
 
 class StubSession:
-    def __init__(self, rows=()):
+    """The subset of Session the endpoints actually use: execute and commit."""
+
+    def __init__(self, rows=(), commit_error: Exception | None = None):
         self.rows = list(rows)
-        self.merged = []
+        self.commit_error = commit_error
+        self.commits = 0
 
     def execute(self, statement):
         return StubResult(self.rows)
 
-    def merge(self, obj):
-        self.merged.append(obj)
-        return obj
-
-    def flush(self):
-        pass
+    def commit(self):
+        self.commits += 1
+        if self.commit_error is not None:
+            raise self.commit_error
 
 
 def make_row(symbol="Depends", distance=0.2):
@@ -144,3 +145,72 @@ def test_ingest_maps_a_partial_checkout_to_502(monkeypatch, client):
 )
 def test_repo_name_from_url(url, expected):
     assert _repo_name_from_url(url) == expected
+
+
+def _mini_repo(tmp_path):
+    """A checkout-shaped directory holding one ingestible Python file."""
+    package = tmp_path / "fastapi"
+    package.mkdir()
+    (package / "x.py").write_text(
+        "def hello(name):\n" '    """Greet."""\n' "    return name\n",
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+def test_ingest_writes_chunks_and_reports_them(monkeypatch, client, tmp_path):
+    repo_dir = _mini_repo(tmp_path)
+    monkeypatch.setattr(
+        "devagent.api.main.ensure_repo", lambda repo_url, target: repo_dir
+    )
+    response = client.post("/ingest", json={})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["repo"] == "fastapi/fastapi", "label defaults to the configured URL"
+    assert body["files_processed"] > 0
+    assert body["chunks_written"] > 0
+    assert body["files_skipped"] == []
+    assert body["batches_failed"] == 0
+
+
+def test_ingest_repo_overrides_only_the_label(monkeypatch, client, tmp_path):
+    repo_dir = _mini_repo(tmp_path)
+    monkeypatch.setattr(
+        "devagent.api.main.ensure_repo", lambda repo_url, target: repo_dir
+    )
+    response = client.post("/ingest", json={"repo": "custom/name"})
+    assert response.status_code == 200
+    assert response.json()["repo"] == "custom/name"
+
+
+def test_ingest_ignores_an_unknown_field(monkeypatch, client, tmp_path):
+    """repo_url was removed: the checkout directory comes from settings, so a
+    per-request URL would ingest one repository under another's name. Pydantic's
+    default config ignores unknown fields, so sending it is a no-op rather than
+    a silent mislabel."""
+    repo_dir = _mini_repo(tmp_path)
+    monkeypatch.setattr(
+        "devagent.api.main.ensure_repo", lambda repo_url, target: repo_dir
+    )
+    response = client.post(
+        "/ingest", json={"repo_url": "https://github.com/pallets/flask"}
+    )
+    assert response.status_code == 200
+    assert response.json()["repo"] == "fastapi/fastapi"
+
+
+def test_ingest_reports_500_when_the_commit_fails(monkeypatch, tmp_path):
+    """A failed commit must not be reported as a successful ingest."""
+    repo_dir = _mini_repo(tmp_path)
+    monkeypatch.setattr(
+        "devagent.api.main.ensure_repo", lambda repo_url, target: repo_dir
+    )
+    session = StubSession(commit_error=RuntimeError("deadlock detected"))
+    app.dependency_overrides[get_provider_dep] = lambda: FakeProvider(dimensions=8)
+    app.dependency_overrides[get_session_dep] = lambda: session
+    try:
+        response = TestClient(app).post("/ingest", json={})
+        assert response.status_code == 500
+        assert "deadlock detected" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
