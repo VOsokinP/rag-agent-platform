@@ -116,3 +116,38 @@ def test_module_chunk_range_covers_only_retained_lines(decorated_chunks):
     module_chunk = next(c for c in decorated_chunks if c.symbol == "<module>")
     source_lines = load("decorated.py").splitlines()
     assert module_chunk.end_line < len(source_lines)
+
+
+def test_no_chunk_exceeds_the_size_cap():
+    source = "def big():\n" + "\n".join(f"    x{i} = {i}" for i in range(3000))
+    chunks = chunk_python_source(source, "pkg/big.py", max_chars=2000)
+    assert chunks
+    assert all(len(c.text) <= 2000 for c in chunks), [len(c.text) for c in chunks]
+
+
+def test_split_pieces_have_distinct_line_ranges():
+    """(start_line, end_line) is part of the DB uniqueness key — pieces must differ."""
+    source = "def big():\n" + "\n".join(f"    x{i} = {i}" for i in range(3000))
+    chunks = chunk_python_source(source, "pkg/big.py", max_chars=2000)
+    ranges = [(c.start_line, c.end_line) for c in chunks]
+    assert len(ranges) == len(set(ranges)), ranges
+
+
+def test_split_line_numbers_match_the_source():
+    source = "def big():\n" + "\n".join(f"    x{i} = {i}" for i in range(3000))
+    lines = source.split("\n")
+    for chunk in chunk_python_source(source, "pkg/big.py", max_chars=2000):
+        assert chunk.text.split("\n")[0] == lines[chunk.start_line - 1]
+
+
+def test_oversized_class_becomes_a_header_chunk_not_a_split_body():
+    body = "\n".join(
+        f"    def m{i}(self):\n        return {i}" for i in range(400)
+    )
+    source = f'class Huge:\n    """Docs."""\n{body}\n'
+    chunks = chunk_python_source(source, "pkg/huge.py", max_chars=2000)
+    class_chunk = next(c for c in chunks if c.symbol == "Huge")
+    assert "class Huge:" in class_chunk.text
+    assert '"""Docs."""' in class_chunk.text
+    assert "def m399" not in class_chunk.text, "body must not be in the header chunk"
+    assert any(c.symbol == "Huge.m399" for c in chunks), "methods still chunked"

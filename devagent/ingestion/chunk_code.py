@@ -4,6 +4,12 @@ One chunk per top-level function, class, and method, plus a single `<module>`
 chunk holding the file's module-level code (imports, constants). Chunking on
 definition boundaries rather than fixed-size windows means a function is never
 split mid-body, and citations name a real symbol instead of a line range.
+
+Chunks are capped at `max_chars` because the embeddings API rejects the whole
+request when any single input exceeds its token limit — one oversized chunk
+would otherwise silently discard its entire batch. A class that exceeds the cap
+becomes a header chunk (its methods are already chunked separately); a function
+that exceeds it is split on line boundaries.
 """
 
 import ast
@@ -16,8 +22,15 @@ logger = logging.getLogger(__name__)
 _DEFINITION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
-def chunk_python_source(source: str, file_path: str) -> list[Chunk]:
-    """Split Python source into chunks. Returns [] if the source cannot be parsed."""
+def chunk_python_source(
+    source: str, file_path: str, max_chars: int = 8000
+) -> list[Chunk]:
+    """Split Python source into chunks. Returns [] if the source cannot be parsed.
+
+    No returned chunk's text exceeds `max_chars`. The default leaves headroom
+    under `text-embedding-3-small`'s 8,192-token input limit at the ~4 chars per
+    token that Python source averages.
+    """
     try:
         tree = ast.parse(source)
     except SyntaxError as exc:
@@ -35,7 +48,12 @@ def chunk_python_source(source: str, file_path: str) -> list[Chunk]:
         definition_line_numbers.update(range(_start_line(node), _end_line(node) + 1))
         chunk = _chunk_from_node(node, node.name, lines, file_path)
         if chunk is not None:
-            chunks.append(chunk)
+            if isinstance(node, ast.ClassDef) and len(chunk.text) > max_chars:
+                header = _class_header_chunk(node, lines, file_path)
+                if header is not None:
+                    chunks.extend(_split_oversized_chunk(header, max_chars))
+            else:
+                chunks.extend(_split_oversized_chunk(chunk, max_chars))
 
         if isinstance(node, ast.ClassDef):
             for member in node.body:
@@ -44,13 +62,82 @@ def chunk_python_source(source: str, file_path: str) -> list[Chunk]:
                         member, f"{node.name}.{member.name}", lines, file_path
                     )
                     if method_chunk is not None:
-                        chunks.append(method_chunk)
+                        chunks.extend(_split_oversized_chunk(method_chunk, max_chars))
 
     module_chunk = _module_chunk(lines, definition_line_numbers, file_path)
     if module_chunk is not None:
-        chunks.append(module_chunk)
+        chunks.extend(_split_oversized_chunk(module_chunk, max_chars))
 
     return chunks
+
+
+def _class_header_chunk(
+    node: ast.ClassDef, lines: list[str], file_path: str
+) -> Chunk | None:
+    """A chunk covering a class's decorators, signature, and docstring only.
+
+    Used when the full class body exceeds the embedding input limit. The methods
+    are already separate chunks, so re-splitting the body would embed them twice;
+    the header still gives retrieval something that describes the class itself.
+    """
+    start = _start_line(node)
+    end = node.body[0].lineno - 1 if node.body else node.lineno
+    docstring = ast.get_docstring(node)
+    if docstring is not None and node.body:
+        end = getattr(node.body[0], "end_lineno", node.body[0].lineno)
+    text = "\n".join(lines[start - 1 : end]).strip("\n")
+    if not text.strip():
+        return None
+    return Chunk(
+        file_path=file_path,
+        symbol=node.name,
+        kind=CODE,
+        start_line=start,
+        end_line=end,
+        text=text,
+    )
+
+
+def _split_oversized_chunk(chunk: Chunk, max_chars: int) -> list[Chunk]:
+    """Split a chunk that would exceed the embedding input limit.
+
+    Splits on line boundaries so every piece stays syntactically readable, and
+    derives each piece's line range from its offset within the original, so the
+    pieces never share a (start_line, end_line) pair — that pair is part of the
+    database's uniqueness key.
+    """
+    if len(chunk.text) <= max_chars:
+        return [chunk]
+
+    lines = chunk.text.split("\n")
+    pieces: list[Chunk] = []
+    buffer: list[str] = []
+    length = 0
+    offset = 0
+
+    def flush(next_offset: int) -> None:
+        nonlocal buffer, length, offset
+        if buffer:
+            pieces.append(
+                Chunk(
+                    file_path=chunk.file_path,
+                    symbol=chunk.symbol,
+                    kind=chunk.kind,
+                    start_line=chunk.start_line + offset,
+                    end_line=chunk.start_line + offset + len(buffer) - 1,
+                    text="\n".join(buffer),
+                )
+            )
+        buffer, length, offset = [], 0, next_offset
+
+    for index, line in enumerate(lines):
+        if buffer and length + len(line) + 1 > max_chars:
+            flush(index)
+        buffer.append(line)
+        length += len(line) + 1
+    flush(len(lines))
+
+    return pieces
 
 
 def _start_line(node: ast.AST) -> int:
