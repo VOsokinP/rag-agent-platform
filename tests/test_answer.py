@@ -130,3 +130,24 @@ def test_all_blank_chunks_raise_rather_than_prompting_with_nothing():
     with pytest.raises(EmptyCorpusError):
         answer_question("q", [blank], provider)
     assert provider.complete_calls == [], "the provider must never be reached"
+
+
+def test_citations_name_only_the_chunks_the_model_was_shown():
+    """A citation is a claim about what went into the prompt.
+
+    build_context drops a blank chunk, so citing it would point the reader at
+    content the model never saw — the exact failure citations exist to prevent.
+    """
+    blank = RetrievedChunk(
+        file_path="fastapi/empty.py",
+        symbol="empty",
+        kind="code",
+        start_line=1,
+        end_line=1,
+        text="   \n\n  ",
+        score=0.9,
+    )
+    provider = FakeProvider(dimensions=8)
+    result = answer_question("q", [blank, make_chunk("Depends")], provider)
+    assert len(result.citations) == 1
+    assert result.citations[0].symbol == "Depends"
