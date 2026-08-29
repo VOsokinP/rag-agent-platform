@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Ingested repos and local data
+data/
+
+# Claude Code local state
+.claude/settings.local.json
+.claude/skills/
+.claude/plugins/
+
+# OS
+.DS_Store
+Thumbs.db

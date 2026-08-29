@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: devagent
+      POSTGRES_PASSWORD: devagent
+      POSTGRES_DB: devagent
+    ports:
+      - "5433:5432"
+    volumes:
+      - devagent_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devagent -d devagent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  devagent_pgdata:
