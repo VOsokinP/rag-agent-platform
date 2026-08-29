@@ -13,9 +13,11 @@ from devagent.llm.provider import Provider
 class RetrievedChunk:
     """A chunk returned by retrieval, with its similarity score.
 
-    `score` is cosine similarity in [0, 1] — higher is a closer match. pgvector's
-    `<=>` operator returns cosine *distance*, so it is converted here rather than
-    leaking an inverted scale into the API response.
+    `score` is cosine similarity in [-1, 1] — higher is a closer match. pgvector's
+    `<=>` operator returns cosine *distance* in [0, 2], so it is converted here
+    rather than leaking an inverted scale into the API response. Unrelated text
+    can score slightly negative; that is meaningful (anti-correlated), not an
+    error, so the value is deliberately not clamped.
     """
 
     file_path: str

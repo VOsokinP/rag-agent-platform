@@ -75,13 +75,23 @@ def test_empty_corpus_returns_empty_list():
 def _sql(statement) -> str:
     from sqlalchemy.dialects import postgresql
 
-    return str(statement.compile(dialect=postgresql.dialect()))
+    return str(
+        statement.compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
 
 
 def test_limit_is_applied_to_the_statement():
     session = StubSession([])
     search("q", FakeProvider(dimensions=8), session, k=3)
-    assert "LIMIT" in _sql(session.executed[0])
+    assert "LIMIT 3" in _sql(session.executed[0])
+
+
+def test_default_k_is_eight():
+    session = StubSession([])
+    search("q", FakeProvider(dimensions=8), session)
+    assert "LIMIT 8" in _sql(session.executed[0])
 
 
 def test_repo_filter_adds_a_where_clause():
@@ -94,3 +104,13 @@ def test_no_repo_filter_means_no_where_clause():
     session = StubSession([])
     search("q", FakeProvider(dimensions=8), session)
     assert "WHERE" not in _sql(session.executed[0])
+
+
+def test_results_are_ordered_by_distance():
+    """Without ORDER BY, the stub still returns rows in order and every other
+    test passes — only real Postgres would reveal the loss."""
+    session = StubSession([])
+    search("q", FakeProvider(dimensions=8), session)
+    sql = _sql(session.executed[0])
+    assert "ORDER BY" in sql
+    assert "<=>" in sql, "ordering must be by the cosine distance operator"
