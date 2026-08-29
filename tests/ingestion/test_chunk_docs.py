@@ -1,0 +1,75 @@
+from pathlib import Path
+
+import pytest
+
+from devagent.ingestion.chunk_docs import chunk_markdown
+
+FIXTURES = Path(__file__).parent.parent / "fixtures" / "mini_repo"
+
+
+def load(name: str) -> str:
+    return (FIXTURES / "docs" / name).read_text(encoding="utf-8")
+
+
+@pytest.fixture
+def guide_chunks():
+    return chunk_markdown(load("guide.md"), "docs/guide.md")
+
+
+def symbols(chunks) -> list[str | None]:
+    return [c.symbol for c in chunks]
+
+
+def test_splits_on_headings(guide_chunks):
+    assert len(guide_chunks) == 4
+
+
+def test_top_level_heading_is_its_own_symbol(guide_chunks):
+    assert "Dependencies" in symbols(guide_chunks)
+
+
+def test_nested_headings_use_a_heading_path(guide_chunks):
+    names = symbols(guide_chunks)
+    assert "Dependencies > First Steps" in names
+    assert "Dependencies > First Steps > Deeper Detail" in names
+
+
+def test_sibling_heading_pops_the_path(guide_chunks):
+    # "Second Topic" is an h2, so it must not inherit "First Steps".
+    assert "Dependencies > Second Topic" in symbols(guide_chunks)
+
+
+def test_chunk_text_includes_the_section_body(guide_chunks):
+    chunk = next(c for c in guide_chunks if c.symbol == "Dependencies > Second Topic")
+    assert "Content about the second topic." in chunk.text
+
+
+def test_chunk_kind_and_path(guide_chunks):
+    for chunk in guide_chunks:
+        assert chunk.kind == "doc"
+        assert chunk.file_path == "docs/guide.md"
+
+
+def test_line_numbers_are_recorded(guide_chunks):
+    for chunk in guide_chunks:
+        assert chunk.start_line > 0
+        assert chunk.end_line >= chunk.start_line
+
+
+def test_file_with_no_headings_yields_one_chunk():
+    chunks = chunk_markdown(load("no_headings.md"), "docs/no_headings.md")
+    assert len(chunks) == 1
+    assert chunks[0].symbol is None
+    assert "Just a paragraph" in chunks[0].text
+
+
+def test_empty_file_yields_no_chunks():
+    assert chunk_markdown("", "docs/empty.md") == []
+
+
+def test_oversized_section_is_split_and_keeps_the_heading_path():
+    source = "# Big\n\n" + "\n\n".join(f"Paragraph {i}." for i in range(400))
+    chunks = chunk_markdown(source, "docs/big.md", max_chars=500)
+    assert len(chunks) > 1
+    assert all(c.symbol == "Big" for c in chunks)
+    assert all(len(c.text) <= 500 for c in chunks)
