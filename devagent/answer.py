@@ -70,7 +70,15 @@ def answer_question(
             "No chunks retrieved. Has the repository been ingested yet?"
         )
 
-    user_prompt = f"Context:\n\n{build_context(chunks)}\n\nQuestion: {question}"
+    context = build_context(chunks)
+    if not context.strip():
+        # Chunks existed but none carried usable text. Calling the model here
+        # would invite exactly the ungrounded answer this error exists to stop.
+        raise EmptyCorpusError(
+            "Retrieved chunks contained no usable text; nothing to ground an answer in."
+        )
+
+    user_prompt = f"Context:\n\n{context}\n\nQuestion: {question}"
     reply = provider.complete(SYSTEM_PROMPT, user_prompt)
 
     return Answer(

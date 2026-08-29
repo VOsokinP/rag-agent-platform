@@ -111,3 +111,22 @@ def test_blank_chunks_are_omitted_from_the_context():
 def test_empty_chunks_raises_rather_than_hallucinating():
     with pytest.raises(EmptyCorpusError):
         answer_question("q", [], FakeProvider())
+
+
+def test_all_blank_chunks_raise_rather_than_prompting_with_nothing():
+    """A non-empty list of blank chunks must not reach the model: the context
+    would be empty and the answer ungrounded, which is what EmptyCorpusError
+    exists to prevent."""
+    blank = RetrievedChunk(
+        file_path="fastapi/empty.py",
+        symbol="nothing",
+        kind="code",
+        start_line=1,
+        end_line=1,
+        text="   \n  ",
+        score=0.5,
+    )
+    provider = FakeProvider()
+    with pytest.raises(EmptyCorpusError):
+        answer_question("q", [blank], provider)
+    assert provider.complete_calls == [], "the provider must never be reached"
