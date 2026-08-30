@@ -24,3 +24,6 @@ data/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local working notes, never published
+_notes/
