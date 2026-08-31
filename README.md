@@ -7,13 +7,11 @@ Target repository: [`fastapi/fastapi`](https://github.com/fastapi/fastapi).
 
 ## Status
 
-The Milestone 1 implementation (ingestion + RAG core) is complete and unit-verified:
-122 unit tests pass with no network or database access. End-to-end verification
-against the live FastAPI repository, a live Postgres instance, and a real OpenAI API
-key is written (`pytest -m integration`) but has not yet been run in this environment
-— there is no `OPENAI_API_KEY` available here. That run, and the by-hand `/query`
-check against the running API, are pending until a key is supplied. See
-`PROJECT_SPEC.md` for the full roadmap.
+Ingestion and the RAG core are complete and unit-verified: 134 unit tests pass with no
+network or database access. The end-to-end path — clone the live FastAPI repo, embed it,
+answer a real question against it — is written as an integration suite
+(`pytest -m integration`) but **has not been run yet**; it needs an `OPENAI_API_KEY`,
+which this project doesn't currently have.
 
 ## Setup
 
@@ -80,8 +78,8 @@ it will spend a small amount of real money on embeddings (a few cents at
   prompt instructs the model to treat retrieved chunks as data rather than instructions,
   but the block delimiters around that content are not escaped. This is only
   appropriate for a corpus you trust. It matters more once the agent gains tools that
-  can act on the codebase (Milestone 3), where prompt-injected content could otherwise
-  influence tool calls.
+  can act on the codebase, where prompt-injected content could otherwise influence tool
+  calls.
 - **Methods are embedded twice, and that is deliberate.** A class produces one chunk
   for the whole class *and* one chunk per method, so a method's source is embedded both
   standalone and inside its class. Measured on the FastAPI corpus that is 1,224,827
