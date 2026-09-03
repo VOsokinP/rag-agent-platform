@@ -43,12 +43,22 @@ def test_ingest_writes_a_substantial_number_of_chunks(ingested):
 
 
 def test_retrieval_finds_the_depends_definition(ingested):
+    """FastAPI defines `Depends` twice: the frozen dataclass in `params.py` and
+    the function wrapper in `param_functions.py`. Either is the definition this
+    question is asking about, and which one ranks higher shifts with the docs
+    that compete for the same query, so pinning the assertion to one file path
+    makes the test fail on upstream drift rather than on a retrieval regression.
+    """
     with session_scope() as session:
         results = search(
             "what does Depends do?", get_provider(), session, repo=REPO, k=8
         )
     assert results
-    assert any("param_functions" in r.file_path for r in results)
+    assert any(
+        r.symbol == "Depends"
+        and r.file_path in {"fastapi/params.py", "fastapi/param_functions.py"}
+        for r in results
+    )
 
 
 def test_answer_is_grounded_and_cited(ingested):
