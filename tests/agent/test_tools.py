@@ -197,3 +197,20 @@ def test_git_blame_reads_the_source_checkout_not_the_workspace_copy(tmp_path):
 
 def _git(cwd, *args):
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+
+
+def test_search_code_falls_back_to_the_contexts_k(tmp_path, monkeypatch):
+    """`k` on the request is only real if it reaches retrieval."""
+    seen = {}
+
+    def fake_search(question, provider, session, repo=None, k=8):
+        seen["k"] = k
+        return []
+
+    monkeypatch.setattr(toolset, "vector_search", fake_search)
+    ctx = make_ctx(tmp_path)
+    ctx.k = 3
+    search_code(ctx, "q")
+    assert seen["k"] == 3
+    search_code(ctx, "q", k=12)
+    assert seen["k"] == 12

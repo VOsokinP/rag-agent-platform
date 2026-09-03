@@ -6,20 +6,29 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
 
+from devagent.agent.graph import run_agent
+from devagent.agent.tools import ToolContext
 from devagent.answer import EmptyCorpusError, answer_question
 from devagent.api.schemas import (
+    AgentRequest,
+    AgentResponse,
     CitationOut,
     IngestRequest,
     IngestResponse,
     QueryRequest,
     QueryResponse,
+    StepOut,
+    UsageOut,
 )
 from devagent.config import get_settings
 from devagent.db.session import session_scope
 from devagent.ingestion.clone import ensure_repo
 from devagent.ingestion.pipeline import ingest
+from devagent.llm.chat import chat_model
 from devagent.llm.provider import Provider, get_provider
 from devagent.retrieval.vector_search import search
+from devagent.sandbox.runner import DockerRunner
+from devagent.sandbox.workspace import PatchError, workspace
 
 logging.basicConfig(level=logging.INFO)
 
@@ -119,4 +128,40 @@ def query_endpoint(
     return QueryResponse(
         answer=result.answer,
         citations=[CitationOut(**vars(citation)) for citation in result.citations],
+    )
+
+
+@app.post("/agent", response_model=AgentResponse)
+def agent_endpoint(
+    request: AgentRequest,
+    provider: Provider = Depends(get_provider_dep),
+    session: Any = Depends(get_session_dep),
+) -> AgentResponse:
+    """Answer a question with tools, optionally against a patched checkout."""
+    settings = get_settings()
+    try:
+        with workspace(settings.repo_dir, request.patch) as root:
+            context = ToolContext(
+                workspace_root=root,
+                # Blame reads committed history, which the patch never touches
+                # and which the copy does not carry.
+                source_repo=settings.repo_dir,
+                provider=provider,
+                session=session,
+                runner=DockerRunner(image=settings.runner_image),
+                repo=_repo_name_from_url(settings.repo_url),
+                k=request.k,
+            )
+            result = run_agent(request.question, context, chat_model())
+    except PatchError as exc:
+        # The patch is the user's input, so this is a 400 -- and it is caught
+        # before any model call, so a bad diff costs nothing.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return AgentResponse(
+        answer=result.answer,
+        steps=[StepOut(**vars(step)) for step in result.steps],
+        citations=[CitationOut(**vars(c)) for c in result.citations],
+        usage=UsageOut(**vars(result.usage)),
+        budget_exhausted=result.budget_exhausted,
     )

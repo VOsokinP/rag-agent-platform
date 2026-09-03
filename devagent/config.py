@@ -29,6 +29,7 @@ class Settings(BaseSettings):
 
     repo_url: str = "https://github.com/fastapi/fastapi"
     repo_dir: Path = Path("data/repos/fastapi")
+    runner_image: str = "devagent-runner:fastapi"
 
 
 @lru_cache

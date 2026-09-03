@@ -35,7 +35,9 @@ TOOLS = {
 
 class SearchCodeArgs(BaseModel):
     query: str = Field(description="What to look for, in natural language.")
-    k: int = Field(default=8, description="How many chunks to return.")
+    k: int | None = Field(
+        default=None, description="How many chunks to return; omit for the default."
+    )
 
 
 class ReadFileArgs(BaseModel):

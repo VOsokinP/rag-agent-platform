@@ -40,6 +40,9 @@ class ToolContext:
     session: Any
     runner: Any
     repo: str | None = None
+    # How many chunks a search returns when the model does not say. Comes
+    # from the request, so a caller can widen retrieval without new code.
+    k: int = 8
     citations: list[RetrievedChunk] = field(default_factory=list)
 
     def resolve(self, path: str) -> Path:
@@ -65,9 +68,11 @@ class ToolContext:
         self.citations[:] = list(by_span.values())
 
 
-def search_code(ctx: ToolContext, query: str, k: int = 8) -> str:
+def search_code(ctx: ToolContext, query: str, k: int | None = None) -> str:
     """Find code and docs chunks relevant to `query`."""
-    chunks = vector_search(query, ctx.provider, ctx.session, repo=ctx.repo, k=k)
+    chunks = vector_search(
+        query, ctx.provider, ctx.session, repo=ctx.repo, k=k or ctx.k
+    )
     if not chunks:
         return "No matching chunks were found."
     # Citations come from what retrieval actually returned, never from model

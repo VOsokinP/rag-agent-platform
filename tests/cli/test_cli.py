@@ -243,3 +243,66 @@ def test_truncation_marker_is_ascii(capsys):
     out = capsys.readouterr().out
     assert "..." in out
     out.encode("cp1252")  # raises if any character is unencodable
+
+
+AGENT_PAYLOAD = {
+    "answer": "Yes - 3 tests fail.",
+    "steps": [
+        {"tool": "run_tests", "input": "tests/test_params_repr.py", "result": "3 failed"}
+    ],
+    "citations": [],
+    "usage": {
+        "llm_calls": 4,
+        "prompt_tokens": 18000,
+        "completion_tokens": 340,
+        "cost_usd": 0.012,
+    },
+    "budget_exhausted": False,
+}
+
+
+def test_ask_prints_answer_steps_and_usage(capsys):
+    code = cli.main(
+        ["ask", "would this break tests?"],
+        transport=transport_returning(AGENT_PAYLOAD),
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "Yes - 3 tests fail." in out
+    assert "run_tests" in out
+    assert "0.012" in out
+
+
+def test_ask_sends_a_patch_file(tmp_path):
+    patch = tmp_path / "change.diff"
+    patch.write_text("--- a/x\n+++ b/x\n", encoding="utf-8")
+    captured = []
+    cli.main(
+        ["ask", "q", "--patch", str(patch)],
+        transport=transport_returning(AGENT_PAYLOAD, capture=captured),
+    )
+    assert "--- a/x" in captured[0].read().decode()
+
+
+def test_ask_reports_a_missing_patch_file_without_calling_the_server(tmp_path, capsys):
+    captured = []
+    code = cli.main(
+        ["ask", "q", "--patch", str(tmp_path / "nope.diff")],
+        transport=transport_returning(AGENT_PAYLOAD, capture=captured),
+    )
+    assert code == 1
+    assert captured == []
+    assert "patch file" in capsys.readouterr().err.lower()
+
+
+def test_ask_warns_when_the_budget_was_exhausted(capsys):
+    payload = dict(AGENT_PAYLOAD, budget_exhausted=True)
+    cli.main(["ask", "q"], transport=transport_returning(payload))
+    assert "budget" in capsys.readouterr().out.lower()
+
+
+def test_ask_has_no_read_timeout():
+    """An agent run includes container test runs and several model calls."""
+    captured = []
+    cli.main(["ask", "q"], transport=transport_returning(AGENT_PAYLOAD, capture=captured))
+    assert captured[0].extensions["timeout"]["read"] is None
