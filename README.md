@@ -10,13 +10,11 @@ Target repository: [`fastapi/fastapi`](https://github.com/fastapi/fastapi).
 Ingestion and the RAG core are complete and unit-verified: 155 unit tests pass with no
 network or database access.
 
-The end-to-end path has been exercised for real once: a live clone of FastAPI ingested
-into Postgres as 2,666 chunks against the real embeddings API. That first run also
-exposed the index build-order bug described under Known characteristics — retrieval
-returned nothing until the index was moved from IVFFlat to HNSW. The full integration
-suite (`pytest -m integration`) covers clone → embed → answer and needs an
-`OPENAI_API_KEY`; the database-only integration tests in `tests/db/` need Postgres but
-no key and no spend.
+The end-to-end path is verified: `pytest -m integration` passes all 6 tests against a
+live clone of FastAPI, real Postgres, and the real OpenAI API — clone, embed roughly
+2,700 chunks, retrieve, and answer with citations into real source. That first real run
+also exposed the index build-order bug described under Known characteristics: retrieval
+returned nothing until the index was moved from IVFFlat to HNSW.
 
 ## Setup
 
