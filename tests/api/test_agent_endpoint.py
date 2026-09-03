@@ -1,10 +1,32 @@
+from contextlib import contextmanager
+
 import pytest
 from fastapi.testclient import TestClient
 
 from devagent.agent.state import AgentResult, Step, Usage
 from devagent.api.main import app, get_provider_dep, get_session_dep
+from devagent.config import get_settings
 from devagent.sandbox.workspace import PatchError
 from tests.fakes import FakeProvider
+
+
+@pytest.fixture
+def fake_workspace(tmp_path, monkeypatch):
+    """Stand in for the real copy of the ingested checkout.
+
+    `workspace()` copies `data/repos/fastapi`, which exists only on a machine
+    that has already ingested. Left in place it makes these tests copy 51 MB
+    each and pass locally while failing on any clean checkout.
+    """
+    root = tmp_path / "fastapi"
+    root.mkdir()
+
+    @contextmanager
+    def fake(repo_dir, patch):
+        yield root
+
+    monkeypatch.setattr("devagent.api.main.workspace", fake)
+    return root
 
 
 @pytest.fixture(autouse=True)
@@ -23,7 +45,7 @@ RESULT = AgentResult(
 )
 
 
-def test_agent_returns_answer_steps_and_usage(monkeypatch):
+def test_agent_returns_answer_steps_and_usage(monkeypatch, fake_workspace):
     monkeypatch.setattr("devagent.api.main.run_agent", lambda *a, **k: RESULT)
     monkeypatch.setattr("devagent.api.main.chat_model", lambda: object())
 
@@ -36,7 +58,7 @@ def test_agent_returns_answer_steps_and_usage(monkeypatch):
     assert body["budget_exhausted"] is False
 
 
-def test_the_context_carries_both_roots(monkeypatch):
+def test_the_context_carries_both_roots(monkeypatch, fake_workspace):
     """Tools read the throwaway copy; blame reads the checkout that outlives it."""
     seen = {}
 
@@ -49,7 +71,8 @@ def test_the_context_carries_both_roots(monkeypatch):
 
     TestClient(app).post("/agent", json={"question": "q", "k": 3})
     ctx = seen["ctx"]
-    assert ctx.workspace_root != ctx.source_repo
+    assert ctx.workspace_root == fake_workspace
+    assert ctx.source_repo == get_settings().repo_dir
     assert ctx.k == 3
 
 
