@@ -16,11 +16,6 @@ venv/
 # Ingested repos and local data
 data/
 
-# Claude Code local state
-.claude/settings.local.json
-.claude/skills/
-.claude/plugins/
-
 # OS
 .DS_Store
 Thumbs.db
