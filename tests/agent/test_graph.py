@@ -1,5 +1,7 @@
 """The loop, driven by a scripted model so it runs offline."""
 
+from langchain_core.messages import ToolMessage
+
 from devagent.agent.graph import bound_tools, run_agent
 from devagent.agent.tools import ToolContext
 from tests.fakes import FakeProvider
@@ -63,6 +65,31 @@ def test_stops_at_the_budget_and_says_so(tmp_path):
     result = run_agent("loop forever", make_ctx(tmp_path), model, budget=3)
     assert result.budget_exhausted is True
     assert len(result.steps) == 3
+
+
+def test_every_tool_call_is_answered_when_the_budget_runs_out_mid_batch(tmp_path):
+    """A model turn's tool calls must all get a reply, budget or not.
+
+    The API rejects an assistant message whose tool_calls are not each answered
+    by a ToolMessage, so a budget hit partway through a batch has to decline the
+    rest rather than drop them -- the loop goes back to the model afterwards
+    and would hand it an unanswerable turn.
+    """
+    (tmp_path / "a.py").write_text("x\n", encoding="utf-8")
+    batch = [
+        {"name": "read_file", "args": {"path": "a.py"}, "id": str(n)}
+        for n in (1, 2, 3)
+    ]
+    model = FakeModel([FakeMessage(tool_calls=batch), FakeMessage(content="done")])
+    result = run_agent("q", make_ctx(tmp_path), model, budget=1)
+
+    handed_back = model.seen[1]
+    answered = {
+        m.tool_call_id for m in handed_back if isinstance(m, ToolMessage)
+    }
+    assert answered == {"1", "2", "3"}
+    # The budget still binds: the declined calls are answered, not executed.
+    assert len(result.steps) == 1
 
 
 def test_accumulates_usage_across_calls(tmp_path):

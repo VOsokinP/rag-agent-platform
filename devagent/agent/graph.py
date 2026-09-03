@@ -25,6 +25,8 @@ SYSTEM = (
     "report their real output; never guess."
 )
 
+BUDGET_SPENT = "Not run: the step budget is spent. Answer from what you have."
+
 TOOLS = {
     "search_code": toolset.search_code,
     "read_file": toolset.read_file,
@@ -109,16 +111,23 @@ def run_agent(
         return {"messages": [reply]}
 
     def call_tools(state: AgentState) -> dict:
+        spent = len(state["steps"])
         steps, messages = [], []
         for call in state["messages"][-1].tool_calls:
+            # A batch that crosses the budget is declined from here on, not
+            # abandoned. The graph goes back to the model either way, and the
+            # API rejects an assistant turn whose tool_calls are not each
+            # answered -- so dropping the rest would 500 the request rather
+            # than stop it. Declining still spends nothing: the tool never runs.
+            if spent + len(steps) >= budget:
+                messages.append(ToolMessage(content=BUDGET_SPENT, tool_call_id=call["id"]))
+                continue
             result = _invoke_tool(ctx, call)
             steps.append(Step(call["name"], _describe(call["args"]), result))
             # A ToolMessage carrying the originating tool_call_id, not a plain
             # ("tool", text) tuple: the API rejects a tool result it cannot
             # match to a call, and the fake model would not catch that.
             messages.append(ToolMessage(content=result, tool_call_id=call["id"]))
-            if len(state["steps"]) + len(steps) >= budget:
-                break
         return {"messages": messages, "steps": steps}
 
     def route(state: AgentState) -> str:
