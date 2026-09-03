@@ -93,6 +93,13 @@ class DockerRunner:
             raise ValueError(f"test target must be a relative path inside tests/: {target}")
         if candidate.parts[:1] != ("tests",):
             raise ValueError(f"test target must live under tests/: {target}")
+        # The tutorial tests write into the work tree, which is mounted
+        # read-only. Refusing them beats running them and reporting the
+        # resulting OSErrors as tests the patch broke.
+        if candidate.parts[:2] == ("tests", "test_tutorial"):
+            raise ValueError(
+                f"tutorial tests write into the work tree, which is read-only: {target}"
+            )
 
         return [
             "docker", "run", "--rm",

@@ -80,3 +80,14 @@ def test_a_collection_error_is_a_real_run():
 def test_an_interruption_with_nothing_to_report_is_not_a_run():
     result = TestResult.from_output(exit_code=2, output="collected 0 items", duration=1.0)
     assert not result.ok
+
+
+def test_docker_command_refuses_the_tutorial_tests(tmp_path):
+    """They write into the work tree, which is mounted read-only.
+
+    A clear refusal beats a run that fails on OSError and reads as "your patch
+    broke 21 tests".
+    """
+    runner = DockerRunner(image="x", timeout=1)
+    with pytest.raises(ValueError):
+        runner.build_command(tmp_path, "tests/test_tutorial/test_templates/test_tutorial001.py")
