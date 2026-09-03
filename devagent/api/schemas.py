@@ -53,3 +53,38 @@ class CitationOut(BaseModel):
 class QueryResponse(BaseModel):
     answer: str
     citations: list[CitationOut]
+
+
+class AgentRequest(BaseModel):
+    question: str = Field(min_length=1)
+    patch: str | None = Field(default=None, description="Unified diff to apply before running.")
+    k: int = Field(default=8, ge=1, le=100)
+
+    @field_validator("question")
+    @classmethod
+    def question_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("question must not be blank")
+        return stripped
+
+
+class StepOut(BaseModel):
+    tool: str
+    input: str
+    result: str
+
+
+class UsageOut(BaseModel):
+    llm_calls: int
+    prompt_tokens: int
+    completion_tokens: int
+    cost_usd: float = Field(description="Estimated from configured rates, not billed.")
+
+
+class AgentResponse(BaseModel):
+    answer: str
+    steps: list[StepOut]
+    citations: list[CitationOut]
+    usage: UsageOut
+    budget_exhausted: bool

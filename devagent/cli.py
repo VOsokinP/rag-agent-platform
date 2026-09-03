@@ -11,6 +11,7 @@ between "the server is down" and "the corpus is empty".
 import argparse
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -167,6 +168,46 @@ def _query(args, transport) -> int:
     return 0
 
 
+def _ask(args, transport) -> int:
+    question = args.question.strip()
+    if not question:
+        return _fail("The question is empty.")
+
+    body: dict[str, Any] = {"question": question, "k": args.k}
+    if args.patch:
+        try:
+            body["patch"] = Path(args.patch).read_text(encoding="utf-8")
+        except OSError as exc:
+            return _fail(f"Could not read the patch file: {exc}")
+
+    # Agent runs make several model calls and at least one container test run,
+    # so they get the ingest timeout rather than the query one.
+    payload, status = _request(args.url, "POST", "/agent", INGEST_TIMEOUT, transport, json=body)
+    if status is None:
+        return 1
+    if status != 200:
+        return _fail(_detail(payload, status))
+
+    print(payload["answer"])
+
+    steps = payload.get("steps") or []
+    if steps:
+        print("\nSteps:")
+        for number, step in enumerate(steps, start=1):
+            print(f"  {number}. {step['tool']}({step['input']}) -> {_shorten(step['result'])}")
+
+    usage = payload.get("usage") or {}
+    if usage:
+        print(
+            f"\n{usage['llm_calls']} model calls, "
+            f"{usage['prompt_tokens'] + usage['completion_tokens']} tokens, "
+            f"~${usage['cost_usd']:.3f} (estimated)"
+        )
+    if payload.get("budget_exhausted"):
+        print("\nWarning: the step budget was exhausted; this answer may be incomplete.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="devagent", description="Talk to a running DevAgent server."
@@ -190,6 +231,12 @@ def build_parser() -> argparse.ArgumentParser:
     query.add_argument("-k", type=int, default=8, help="Chunks to retrieve (default: 8).")
     query.add_argument("--repo", default=None, help="Restrict retrieval to one repo label.")
     query.set_defaults(handler=_query)
+
+    ask = subparsers.add_parser("ask", help="Ask the agent, which can run tests.")
+    ask.add_argument("question")
+    ask.add_argument("--patch", default=None, help="Path to a unified diff to apply first.")
+    ask.add_argument("-k", type=int, default=8, help="Chunks to retrieve (default: 8).")
+    ask.set_defaults(handler=_ask)
 
     return parser
 

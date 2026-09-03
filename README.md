@@ -3,20 +3,36 @@
 [![tests](https://github.com/VOsokinP/rag-agent-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/VOsokinP/rag-agent-platform/actions/workflows/ci.yml)
 
 A RAG-based coding assistant over a real GitHub repository. It ingests code and docs,
-and answers questions grounded in retrieved source with file-level citations.
+and answers questions grounded in retrieved source with file-level citations. It also
+runs an agent that can apply a patch to a throwaway copy of the checkout and execute the
+repository's own test suite in a locked-down container, reporting what actually happened
+rather than predicting it.
 
 Target repository: [`fastapi/fastapi`](https://github.com/fastapi/fastapi).
 
 ## Status
 
-Ingestion and the RAG core are complete and unit-verified: 155 unit tests pass with no
-network or database access.
+Ingestion, the RAG core, and the agent loop are complete and unit-verified: 212 unit
+tests pass with no network, database, Docker, or API key.
 
-The end-to-end path is verified: `pytest -m integration` passes all 6 tests against a
-live clone of FastAPI, real Postgres, and the real OpenAI API — clone, embed roughly
-2,700 chunks, retrieve, and answer with citations into real source. That first real run
-also exposed the index build-order bug described under Known characteristics: retrieval
-returned nothing until the index was moved from IVFFlat to HNSW.
+The end-to-end path is verified twice over.
+
+`pytest -m integration` passes against a live clone of FastAPI, real Postgres, and the
+real OpenAI API — clone, embed roughly 2,700 chunks, retrieve, and answer with citations
+into real source. That first real run also exposed the index build-order bug described
+under Known characteristics: retrieval returned nothing until the index was moved from
+IVFFlat to HNSW.
+
+`pytest -m "integration and sandbox"` puts the agent through the same path with a patch
+that breaks `fastapi/params.py` at import time. The agent chose to run the tests, and
+reported the real result:
+
+> Yes, the change would break tests. The test file `tests/test_params_repr.py`
+> encountered an error during collection due to a `RuntimeError` raised in
+> `fastapi/params.py` [...] This indicates that the tests cannot be executed
+> successfully.
+
+Two model calls, ~1,100 tokens, well inside the 8-step budget.
 
 ## Setup
 
@@ -48,6 +64,25 @@ over the HTTP API, so anything it can do, any other client can do too:
 devagent health                              # is the server up?
 devagent ingest                              # clone, chunk, embed, store
 devagent query "what does Depends do?"       # answer, with sources
+devagent ask "what does Depends do?"         # same question, but with tools
+```
+
+`devagent ask` runs the agent rather than a single retrieval-and-answer pass. It can
+search the corpus, read files, blame lines, and run the repository's tests. Pass a
+unified diff with `--patch` to have it answer about code that does not exist yet:
+
+```bash
+devagent ask "would this break any tests? check tests/test_params_repr.py" --patch change.diff
+```
+
+The patch is applied to a throwaway copy of the checkout, never to the checkout itself,
+and the copy is deleted when the request finishes. A diff that does not apply is a 400
+and costs nothing, because it fails before the first model call.
+
+Running the tests needs the runner image, built once from the ingested checkout:
+
+```bash
+docker build -f docker/runner.Dockerfile -t devagent-runner:fastapi data/repos/fastapi
 ```
 
 `devagent query` takes `-k` to change how many chunks are retrieved and `--repo` to
@@ -68,8 +103,9 @@ PowerShell aliases `curl` to `Invoke-WebRequest`, whose arguments differ; there,
 ## Tests
 
 ```bash
-pytest                  # unit tests; no network, no database, no API key required
+pytest                  # unit tests; no network, no database, no Docker, no API key
 pytest -m integration   # real repo clone, real Postgres, real OpenAI calls
+pytest -m sandbox       # real Docker; builds nothing, but needs the runner image
 ```
 
 The unit suite is what CI runs, on Python 3.12 and 3.13. It needs no services and no
@@ -82,8 +118,14 @@ network, no spend — and are worth running after any change to the schema or to
 retrieval. The rest require a running Postgres (`docker compose up -d postgres`),
 a real `OPENAI_API_KEY`, and network access. It clones and embeds the FastAPI repo, so
 it will spend a small amount of real money on embeddings (a few cents at
-`text-embedding-3-small` pricing). It is deselected by default via the
-`not integration` marker expression in `pyproject.toml`.
+`text-embedding-3-small` pricing).
+
+`pytest -m sandbox` needs Docker and the runner image above. It proves the container
+runs the *patched* copy rather than the package installed in the image — the assumption
+every answer about a patch depends on.
+
+Both markers are deselected by default via the `not integration and not sandbox` marker
+expression in `pyproject.toml`, so a fresh clone runs the unit suite and nothing else.
 
 ## Known characteristics
 
@@ -102,9 +144,51 @@ it will spend a small amount of real money on embeddings (a few cents at
 - **Retrieved repository content is inserted into the model's prompt as data.** The
   prompt instructs the model to treat retrieved chunks as data rather than instructions,
   but the block delimiters around that content are not escaped. This is only
-  appropriate for a corpus you trust. It matters more once the agent gains tools that
-  can act on the codebase, where prompt-injected content could otherwise influence tool
-  calls.
+  appropriate for a corpus you trust, and it matters more now that the agent has tools:
+  injected content could otherwise influence a tool call rather than just an answer.
+  **The tool surface is the boundary that actually holds.** It is deliberately small and
+  deliberately dull. `read_file` and `run_tests` are confined to the throwaway copy and
+  `git_blame` to the checkout, all by resolved-path containment rather than string
+  checks. The test container gets no network, 2 GB, two CPUs, 512 processes, a non-root
+  user, a read-only mount and a wall-clock timeout. Test targets must live under
+  `tests/`. The loop stops after a fixed number of tool calls. Nothing writes to the
+  checkout, and nothing the model says can widen any of that — the tools are bound with
+  their context closed over, so the workspace root is not an argument the model can set.
+- **The tests that run are the ones in the container image's pinned environment.** The
+  runner image installs from the target repository's own lockfile rather than resolving
+  its dependencies fresh. Resolving freely once picked a newer `anyio` whose deprecation
+  warning, under FastAPI's `filterwarnings = ["error"]`, turned 444 test files into
+  collection errors before any patch existed — which would have made every answer about
+  a patch a false positive. A useful "did this break anything" needs a green baseline
+  more than it needs current dependencies.
+- **A test file that will not import counts as a failure, not as a broken runner.**
+  pytest exits 2 on a collection error, which is exactly what a patch that breaks a
+  module at import time produces. That is a real finding about the code and is reported
+  as one. A run that genuinely could not happen — no image, a timeout, a container that
+  died — is reported separately and never as "nothing broke".
+- **The tutorial tests are refused, not run.** `tests/test_tutorial/` writes into the
+  working tree, which is mounted read-only, so those tests fail on `OSError` regardless
+  of the patch. Asking for one gets a clear refusal rather than 21 failures that look
+  like the patch's fault. Everything else is green in the container: 2,044 passed
+  against the unmodified checkout.
+- **There are two ways to reach a model, deliberately.** `Provider` wraps the OpenAI SDK
+  directly for embeddings and the single-shot `/query` answer; LangChain and LangGraph
+  are used for the agent and nowhere else. The split is the point rather than drift:
+  ingestion and retrieval stay framework-free and swappable, and the framework is
+  confined to the one place that needs tool calling. `chat_model()` is the only
+  constructor for it.
+- **`/agent` has no concurrency limit.** It is a synchronous endpoint, so FastAPI runs it
+  in anyio's thread pool — forty workers by default, with nothing bounding concurrent
+  agent runs. Forty in flight would be ~1.4 GB of temporary copies and forty containers
+  each permitted 2 GB. That is theoretical for a single-operator local tool, and a queue
+  is more machinery than the problem deserves, but it is a real ceiling rather than an
+  oversight.
+- **`/query` and `/agent` build their citations differently, on purpose.** `/query` goes
+  through `answer.Citation`, which means "what the model was actually shown" — a
+  narrower claim than "what retrieval returned", and the one worth making when a single
+  prompt is the whole answer. `/agent` may search several times across a run, so it
+  reports the deduplicated union of what retrieval returned, keeping each span's best
+  score.
 - **Methods are embedded twice, and that is deliberate.** A class produces one chunk
   for the whole class *and* one chunk per method, so a method's source is embedded both
   standalone and inside its class. Measured on the FastAPI corpus that is 1,224,827
@@ -134,5 +218,12 @@ it will spend a small amount of real money on embeddings (a few cents at
 | Retrieval | `devagent/retrieval/` | Top-k cosine similarity search |
 | Generation | `devagent/answer.py` | Grounded prompt construction and citation assembly |
 | Providers | `devagent/llm/` | Swappable embedding/completion backend |
-| API | `devagent/api/` | `/health`, `/ingest`, `/query` |
+| Agent | `devagent/agent/` | The LangGraph loop, its four tools, and the run's trace |
+| Sandbox | `devagent/sandbox/` | The throwaway patched copy and the container test runner |
+| API | `devagent/api/` | `/health`, `/ingest`, `/query`, `/agent` |
 | CLI | `devagent/cli.py` | The `devagent` command; an HTTP client for the API |
+
+The agent alternates two nodes — ask the model, run the tools it asked for — until it
+answers or spends its step budget. Its four tools are `search_code` (the same retrieval
+`/query` uses), `read_file`, `git_blame`, and `run_tests`. An answer cut short by the
+budget is returned flagged rather than dressed up as finished.
