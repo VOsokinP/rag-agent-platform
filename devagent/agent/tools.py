@@ -5,6 +5,7 @@ and turns a situation the model could have recovered from -- a wrong path, a
 missing file -- into a 500 with no answer.
 """
 
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,13 @@ from devagent.retrieval.vector_search import RetrievedChunk
 from devagent.retrieval.vector_search import search as vector_search
 
 MAX_SPAN = 400
+
+
+def _confine(root: Path, path: str) -> Path:
+    candidate = (root / path).resolve()
+    if not candidate.is_relative_to(root.resolve()):
+        raise ValueError("outside the workspace")
+    return candidate
 
 
 @dataclass
@@ -24,6 +32,10 @@ class ToolContext:
     """
 
     workspace_root: Path
+    # The ingested checkout, kept alongside the throwaway copy: blame is about
+    # committed history, which a user's patch never touches, and unshallowing a
+    # directory that is about to be deleted would pay a fetch per request.
+    source_repo: Path
     provider: Any
     session: Any
     runner: Any
@@ -32,10 +44,11 @@ class ToolContext:
 
     def resolve(self, path: str) -> Path:
         """Resolve `path` inside the workspace, or raise ValueError."""
-        candidate = (self.workspace_root / path).resolve()
-        if not candidate.is_relative_to(self.workspace_root.resolve()):
-            raise ValueError("outside the workspace")
-        return candidate
+        return _confine(self.workspace_root, path)
+
+    def resolve_source(self, path: str) -> Path:
+        """Resolve `path` inside the ingested checkout, or raise ValueError."""
+        return _confine(self.source_repo, path)
 
     def cite(self, chunks: list[RetrievedChunk]) -> None:
         """Record retrieved chunks, keeping one entry per span.
@@ -81,3 +94,53 @@ def read_file(ctx: ToolContext, path: str, start: int = 1, end: int = 200) -> st
     span = body[max(start - 1, 0) : end]
     numbered = "\n".join(f"{n:>6}  {line}" for n, line in enumerate(span, start=start))
     return f"{path} lines {start}-{start + len(span) - 1}:\n{numbered}"
+
+
+def run_tests(ctx: ToolContext, target: str) -> str:
+    """Run a test file from the workspace in the sandbox."""
+    result = ctx.runner.run(ctx.workspace_root, target)
+    if not result.ok:
+        # Distinguished deliberately: "the tests did not run" is an error to
+        # surface, not a finding to report. Collapsing the two lets a broken
+        # runner masquerade as a clean bill of health.
+        return f"The tests could not run: {result.error}"
+    verdict = "no failures" if result.failed == 0 else f"{result.failed} failed"
+    return (
+        f"{target}: {verdict}, {result.passed} passed "
+        f"in {result.duration:.1f}s (exit {result.exit_code})\n{result.output_tail}"
+    )
+
+
+def git_blame(ctx: ToolContext, path: str, start: int, end: int) -> str:
+    """Show who last changed lines `start`..`end` of a file."""
+    try:
+        ctx.resolve_source(path)
+    except ValueError:
+        return f"Refused: {path} is outside the workspace."
+
+    if _is_shallow(ctx.source_repo):
+        # The ingest clone is --depth 1, so blame would credit every line to a
+        # single squashed commit. Unshallowing is slow, but it runs against the
+        # checkout that outlives the request, so it happens once.
+        completed = subprocess.run(
+            ["git", "fetch", "--unshallow"],
+            cwd=ctx.source_repo, capture_output=True, text=True,
+        )
+        if completed.returncode != 0:
+            return f"Could not fetch history for blame: {completed.stderr.strip()}"
+
+    completed = subprocess.run(
+        ["git", "blame", "-L", f"{start},{end}", "--", path],
+        cwd=ctx.source_repo, capture_output=True, text=True,
+    )
+    if completed.returncode != 0:
+        return f"blame failed: {completed.stderr.strip()}"
+    return completed.stdout
+
+
+def _is_shallow(repo_dir: Path) -> bool:
+    completed = subprocess.run(
+        ["git", "rev-parse", "--is-shallow-repository"],
+        cwd=repo_dir, capture_output=True, text=True,
+    )
+    return completed.stdout.strip() == "true"
