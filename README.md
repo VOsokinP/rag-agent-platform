@@ -1,5 +1,7 @@
 # DevAgent
 
+[![tests](https://github.com/VOsokinP/rag-agent-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/VOsokinP/rag-agent-platform/actions/workflows/ci.yml)
+
 A RAG-based coding assistant over a real GitHub repository. It ingests code and docs,
 and answers questions grounded in retrieved source with file-level citations.
 
@@ -69,6 +71,10 @@ PowerShell aliases `curl` to `Invoke-WebRequest`, whose arguments differ; there,
 pytest                  # unit tests; no network, no database, no API key required
 pytest -m integration   # real repo clone, real Postgres, real OpenAI calls
 ```
+
+The unit suite is what CI runs, on Python 3.12 and 3.13. It needs no services and no
+secrets, which is the point of keeping it offline: a clone of this repository can run it
+immediately.
 
 `pytest -m integration` covers two kinds of test. The database-only ones
 (`tests/db/test_index_build_order.py`) need just a running Postgres — no key, no
