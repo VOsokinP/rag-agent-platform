@@ -41,10 +41,22 @@ class Chunk(Base):
         UniqueConstraint(
             "repo", "file_path", "start_line", "end_line", name="uq_chunk_location"
         ),
+        # HNSW rather than IVFFlat, because `init_db()` necessarily creates
+        # this index before anything is ingested. An IVFFlat index derives its
+        # centroids from the rows present at build time, so one built on an
+        # empty table has none: rows inserted later are unreachable through it
+        # and an index scan silently returns a fraction of the true nearest
+        # neighbours, or nothing at all. That surfaces as `/query` reporting an
+        # empty corpus while the data sits in the table -- wrong answers, not
+        # slow ones, and it needed a manual REINDEX after every ingest to
+        # avoid. HNSW builds its graph incrementally as rows arrive, so it is
+        # correct on an empty table and stays correct without a rebuild step.
+        # The trade is slower inserts and more memory, neither of which is
+        # material at this corpus size.
         Index(
             "ix_chunks_embedding",
             "embedding",
-            postgresql_using="ivfflat",
+            postgresql_using="hnsw",
             postgresql_ops={"embedding": "vector_cosine_ops"},
         ),
     )

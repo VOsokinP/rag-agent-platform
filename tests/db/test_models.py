@@ -52,8 +52,15 @@ def test_unique_constraint_excludes_nullable_symbol():
 
 def test_embedding_index_uses_cosine_distance():
     index = next(i for i in Chunk.__table__.indexes if i.name == "ix_chunks_embedding")
-    assert index.dialect_options["postgresql"]["using"] == "ivfflat"
     assert index.dialect_options["postgresql"]["ops"] == {"embedding": "vector_cosine_ops"}
+
+
+def test_embedding_index_is_hnsw_not_ivfflat():
+    """IVFFlat clusters on the rows present at build time, and `init_db()` runs
+    before any ingest. Built empty it has no centroids, so later rows become
+    unreachable and retrieval silently returns too few rows or none."""
+    index = next(i for i in Chunk.__table__.indexes if i.name == "ix_chunks_embedding")
+    assert index.dialect_options["postgresql"]["using"] == "hnsw"
 
 
 def test_base_metadata_registers_the_table():
