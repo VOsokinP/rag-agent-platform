@@ -7,18 +7,23 @@ Target repository: [`fastapi/fastapi`](https://github.com/fastapi/fastapi).
 
 ## Status
 
-Ingestion and the RAG core are complete and unit-verified: 134 unit tests pass with no
-network or database access. The end-to-end path — clone the live FastAPI repo, embed it,
-answer a real question against it — is written as an integration suite
-(`pytest -m integration`) but **has not been run yet**; it needs an `OPENAI_API_KEY`,
-which this project doesn't currently have.
+Ingestion and the RAG core are complete and unit-verified: 155 unit tests pass with no
+network or database access.
+
+The end-to-end path has been exercised for real once: a live clone of FastAPI ingested
+into Postgres as 2,666 chunks against the real embeddings API. That first run also
+exposed the index build-order bug described under Known characteristics — retrieval
+returned nothing until the index was moved from IVFFlat to HNSW. The full integration
+suite (`pytest -m integration`) covers clone → embed → answer and needs an
+`OPENAI_API_KEY`; the database-only integration tests in `tests/db/` need Postgres but
+no key and no spend.
 
 ## Setup
 
 ```bash
 cp .env.example .env          # then put a real OPENAI_API_KEY in it
 docker compose up -d postgres
-pip install -e ".[dev]"
+pip install -e ".[dev]"       # also installs the `devagent` command
 python -c "from devagent.db.session import init_db; init_db()"
 ```
 
@@ -30,23 +35,35 @@ On Windows, the project's interpreter lives at `.venv/Scripts/python` — use th
 
 ## Usage
 
+Start the server:
+
 ```bash
 uvicorn devagent.api.main:app --reload
 ```
 
-Ingest the target repository (clones it on first run, then embeds every chunk):
+Then drive it with the `devagent` CLI from a second terminal. It is a thin client
+over the HTTP API, so anything it can do, any other client can do too:
 
 ```bash
-curl -X POST localhost:8000/ingest -H 'content-type: application/json' -d '{}'
+devagent health                              # is the server up?
+devagent ingest                              # clone, chunk, embed, store
+devagent query "what does Depends do?"       # answer, with sources
 ```
 
-Ask a question:
+`devagent query` takes `-k` to change how many chunks are retrieved and `--repo` to
+restrict retrieval to one label. `--url` (or `DEVAGENT_URL`) points at a server other
+than `http://localhost:8000`. Every command exits non-zero on failure, including an
+ingest that finished with failed embedding batches -- that case leaves stale content
+in the corpus, so it is not reported as success.
+
+The CLI is a convenience, not a required layer. The endpoints take plain JSON:
 
 ```bash
-curl -X POST localhost:8000/query \
-  -H 'content-type: application/json' \
-  -d '{"question": "what does Depends do?"}'
+curl -X POST localhost:8000/query -H 'content-type: application/json' -d '{"question": "what does Depends do?"}'
 ```
+
+PowerShell aliases `curl` to `Invoke-WebRequest`, whose arguments differ; there, use
+`curl.exe`, `Invoke-RestMethod`, or the CLI above.
 
 ## Tests
 
@@ -55,7 +72,10 @@ pytest                  # unit tests; no network, no database, no API key requir
 pytest -m integration   # real repo clone, real Postgres, real OpenAI calls
 ```
 
-`pytest -m integration` requires a running Postgres (`docker compose up -d postgres`),
+`pytest -m integration` covers two kinds of test. The database-only ones
+(`tests/db/test_index_build_order.py`) need just a running Postgres — no key, no
+network, no spend — and are worth running after any change to the schema or to
+retrieval. The rest require a running Postgres (`docker compose up -d postgres`),
 a real `OPENAI_API_KEY`, and network access. It clones and embeds the FastAPI repo, so
 it will spend a small amount of real money on embeddings (a few cents at
 `text-embedding-3-small` pricing). It is deselected by default via the
@@ -63,14 +83,15 @@ it will spend a small amount of real money on embeddings (a few cents at
 
 ## Known characteristics
 
-- **The IVFFlat index is degenerate until rebuilt.** It's built on an empty `chunks`
-  table (schema creation happens before any ingest), so its clusters don't reflect
-  real data. This affects query *speed*, not correctness — searches still return the
-  true nearest neighbours, just without the intended speedup. After a large ingest, if
-  retrieval latency becomes noticeable, rebuild it:
-  ```sql
-  REINDEX INDEX ix_chunks_embedding;
-  ```
+- **The embedding index is HNSW, deliberately.** `init_db()` has to create the index
+  before anything is ingested, and an IVFFlat index derives its centroids from the rows
+  present when it is built. Built on an empty table it has none, so rows inserted later
+  are effectively unreachable through it: an index scan returns a fraction of the true
+  nearest neighbours, or nothing at all, while the rows sit in the table. That is a
+  correctness failure, not a slow query, and it presents as `/query` answering "no
+  chunks retrieved" right after a successful ingest. HNSW builds its graph incrementally
+  as rows arrive, so it is correct on an empty table and needs no rebuild step. The
+  cost is slower inserts and more memory, neither material at this corpus size.
 - **Similarity scores span `[-1, 1]`.** A slightly negative score means the chunk is
   anti-correlated with the query, not merely irrelevant. Scores are deliberately not
   clamped to `[0, 1]`.
@@ -110,3 +131,4 @@ it will spend a small amount of real money on embeddings (a few cents at
 | Generation | `devagent/answer.py` | Grounded prompt construction and citation assembly |
 | Providers | `devagent/llm/` | Swappable embedding/completion backend |
 | API | `devagent/api/` | `/health`, `/ingest`, `/query` |
+| CLI | `devagent/cli.py` | The `devagent` command; an HTTP client for the API |
