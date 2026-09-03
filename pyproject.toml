@@ -16,6 +16,8 @@ dependencies = [
     "langchain-openai>=0.2",
     # Runtime, not dev-only: devagent/cli.py is the client for the HTTP API.
     "httpx>=0.27",
+    # The golden set is YAML because a human hand-edits it; see evals/golden.yaml.
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
