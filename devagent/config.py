@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     chat_model: str = "gpt-4o-mini"
     embedding_dimensions: int = 1536
 
+    agent_step_budget: int = 8
+    # USD per 1M tokens. Estimates for the usage report, not billing truth.
+    chat_input_cost_per_mtok: float = 0.15
+    chat_output_cost_per_mtok: float = 0.60
+
     repo_url: str = "https://github.com/fastapi/fastapi"
     repo_dir: Path = Path("data/repos/fastapi")
 
