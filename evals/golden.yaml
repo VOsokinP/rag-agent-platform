@@ -1,0 +1,349 @@
+# evals/golden.yaml
+# Hand-labelled against fastapi/fastapi at 50113da. Every expect_files and
+# expect_docs entry was opened and read; nothing here is inferred.
+#
+# kind: identifier  -- the question is mostly a literal name. This is the
+#                      population pure vector search is expected to be worst at
+#                      and the one Milestone 2 has to improve. Some are typed
+#                      bare, some are phrased the way people actually search
+#                      ("where is X defined", "X class") so M2 isn't measured
+#                      only on the easiest form.
+# kind: conceptual  -- the question is about behaviour or intent.
+#
+# expect_docs        -- docs/en/docs pages that genuinely answer the question
+#                      from the user side. Only present where such a page
+#                      exists; a conceptual entry without expect_docs means the
+#                      question is internal-only and the docs don't cover it
+#                      (verified at this commit, not assumed).
+#
+# Note on this commit: fastapi/_compat has no v1 module any more (pydantic v1
+# raises PydanticV1NotSupportedError), fastapi/sse.py exists, and the routing
+# layer has grown _IncludedRouter / _EffectiveRouteContext for include_router
+# and FastAPI.frontend(). get_flat_dependant is gone (get_flat_params is the
+# nearest survivor). Older mental models of the tree will mislabel.
+
+- question: what does Depends do?
+  expect_files: [fastapi/params.py, fastapi/param_functions.py]
+  expect_symbols: [Depends]
+  expect_docs: [docs/en/docs/tutorial/dependencies/index.md]
+  kind: conceptual
+
+- question: APIRoute.get_route_handler
+  expect_files: [fastapi/routing.py]
+  expect_symbols: [APIRoute.get_route_handler]
+  kind: identifier
+
+- question: solve_dependencies
+  expect_files: [fastapi/dependencies/utils.py]
+  expect_symbols: [solve_dependencies]
+  kind: identifier
+
+- question: get_dependant
+  expect_files: [fastapi/dependencies/utils.py]
+  expect_symbols: [get_dependant]
+  kind: identifier
+
+- question: jsonable_encoder
+  expect_files: [fastapi/encoders.py]
+  expect_symbols: [jsonable_encoder]
+  kind: identifier
+
+- question: generate_unique_id
+  expect_files: [fastapi/utils.py]
+  expect_symbols: [generate_unique_id]
+  kind: identifier
+
+- question: request_body_to_args
+  expect_files: [fastapi/dependencies/utils.py]
+  expect_symbols: [request_body_to_args]
+  kind: identifier
+
+- question: serialize_response
+  expect_files: [fastapi/routing.py]
+  expect_symbols: [serialize_response]
+  kind: identifier
+
+- question: get_openapi_path
+  expect_files: [fastapi/openapi/utils.py]
+  expect_symbols: [get_openapi_path]
+  kind: identifier
+
+- question: get_swagger_ui_html
+  expect_files: [fastapi/openapi/docs.py]
+  expect_symbols: [get_swagger_ui_html]
+  kind: identifier
+
+- question: OAuth2PasswordRequestForm
+  expect_files: [fastapi/security/oauth2.py]
+  expect_symbols: [OAuth2PasswordRequestForm]
+  kind: identifier
+
+- question: get_authorization_scheme_param
+  expect_files: [fastapi/security/utils.py]
+  expect_symbols: [get_authorization_scheme_param]
+  kind: identifier
+
+- question: AsyncExitStackMiddleware
+  expect_files: [fastapi/middleware/asyncexitstack.py]
+  expect_symbols: [AsyncExitStackMiddleware]
+  kind: identifier
+
+- question: DefaultPlaceholder
+  expect_files: [fastapi/datastructures.py]
+  expect_symbols: [DefaultPlaceholder]
+  kind: identifier
+
+- question: contextmanager_in_threadpool
+  expect_files: [fastapi/concurrency.py]
+  expect_symbols: [contextmanager_in_threadpool]
+  kind: identifier
+
+- question: ensure_multipart_is_installed
+  expect_files: [fastapi/dependencies/utils.py]
+  expect_symbols: [ensure_multipart_is_installed]
+  kind: identifier
+
+- question: FastAPI.setup
+  expect_files: [fastapi/applications.py]
+  expect_symbols: [FastAPI.setup]
+  kind: identifier
+
+- question: EventSourceResponse
+  expect_files: [fastapi/sse.py]
+  expect_symbols: [EventSourceResponse]
+  kind: identifier
+
+- question: is_body_allowed_for_status_code
+  expect_files: [fastapi/utils.py]
+  expect_symbols: [is_body_allowed_for_status_code]
+  kind: identifier
+
+- question: DependencyScopeError
+  expect_files: [fastapi/exceptions.py, fastapi/dependencies/utils.py]
+  expect_symbols: [DependencyScopeError]
+  kind: identifier
+
+- question: where is get_websocket_app defined
+  expect_files: [fastapi/routing.py]
+  expect_symbols: [get_websocket_app]
+  kind: identifier
+
+- question: APIKeyHeader class
+  expect_files: [fastapi/security/api_key.py]
+  expect_symbols: [APIKeyHeader]
+  kind: identifier
+
+- question: fastapi get_redoc_html
+  expect_files: [fastapi/openapi/docs.py]
+  expect_symbols: [get_redoc_html]
+  kind: identifier
+
+- question: BackgroundTasks add_task
+  expect_files: [fastapi/background.py]
+  expect_symbols: [BackgroundTasks, BackgroundTasks.add_task]
+  kind: identifier
+
+- question: get_openapi function in openapi utils
+  expect_files: [fastapi/openapi/utils.py]
+  expect_symbols: [get_openapi]
+  kind: identifier
+
+- question: where's create_model_field
+  expect_files: [fastapi/utils.py]
+  expect_symbols: [create_model_field]
+  kind: identifier
+
+- question: how does fastapi cache a dependency so it only runs once per request?
+  expect_files: [fastapi/dependencies/utils.py, fastapi/dependencies/models.py]
+  expect_symbols: [solve_dependencies, Dependant.use_cache, DependencyCacheKey]
+  expect_docs: [docs/en/docs/tutorial/dependencies/sub-dependencies.md]
+  kind: conceptual
+
+- question: where do dependencies that use yield get their cleanup run?
+  expect_files: [fastapi/dependencies/utils.py, fastapi/routing.py]
+  expect_symbols: [_solve_generator, request_response]
+  expect_docs: [docs/en/docs/tutorial/dependencies/dependencies-with-yield.md]
+  kind: conceptual
+
+- question: what's the difference between HTTPException in fastapi and starlette
+  expect_files: [fastapi/exceptions.py]
+  expect_symbols: [HTTPException]
+  expect_docs: [docs/en/docs/tutorial/handling-errors.md]
+  kind: conceptual
+
+- question: where is the 422 response for a validation error actually built
+  expect_files: [fastapi/exception_handlers.py, fastapi/applications.py]
+  expect_symbols: [request_validation_exception_handler, FastAPI.__init__]
+  expect_docs: [docs/en/docs/tutorial/handling-errors.md]
+  kind: conceptual
+
+- question: how does the /docs endpoint get registered?
+  expect_files: [fastapi/applications.py, fastapi/openapi/docs.py]
+  expect_symbols: [FastAPI.setup, get_swagger_ui_html]
+  kind: conceptual
+
+- question: how is the operationId in the openapi schema generated
+  expect_files: [fastapi/utils.py, fastapi/openapi/utils.py]
+  expect_symbols: [generate_unique_id, get_openapi_operation_metadata]
+  expect_docs: [docs/en/docs/advanced/path-operation-advanced-configuration.md, docs/en/docs/advanced/generate-clients.md]
+  kind: conceptual
+
+- question: how does fastapi decide whether to run an endpoint in a threadpool
+  expect_files: [fastapi/routing.py]
+  expect_symbols: [run_endpoint_function]
+  expect_docs: [docs/en/docs/async.md]
+  kind: conceptual
+
+- question: how does response_model_exclude_unset work
+  expect_files: [fastapi/routing.py]
+  expect_symbols: [serialize_response, APIRoute]
+  expect_docs: [docs/en/docs/tutorial/response-model.md]
+  kind: conceptual
+
+- question: how does the Authorization Bearer header get parsed for OAuth2PasswordBearer
+  expect_files: [fastapi/security/oauth2.py, fastapi/security/utils.py]
+  expect_symbols: [OAuth2PasswordBearer, get_authorization_scheme_param]
+  expect_docs: [docs/en/docs/tutorial/security/first-steps.md]
+  kind: conceptual
+
+- question: how are security scopes passed into a dependency
+  expect_files: [fastapi/security/oauth2.py, fastapi/dependencies/utils.py]
+  expect_symbols: [SecurityScopes, solve_dependencies, add_non_field_param_to_dependency]
+  expect_docs: [docs/en/docs/advanced/security/oauth2-scopes.md]
+  kind: conceptual
+
+- question: what happens if you use a pydantic v1 model in fastapi now
+  expect_files: [fastapi/exceptions.py, fastapi/encoders.py, fastapi/utils.py]
+  expect_symbols: [PydanticV1NotSupportedError]
+  expect_docs: [docs/en/docs/how-to/migrate-from-pydantic-v1-to-pydantic-v2.md]
+  kind: conceptual
+
+- question: when does fastapi wrap multiple body params in an outer object
+  expect_files: [fastapi/dependencies/utils.py]
+  expect_symbols: [_should_embed_body_fields, _get_body_field]
+  expect_docs: [docs/en/docs/tutorial/body-multiple-params.md]
+  kind: conceptual
+
+- question: error when python-multipart isn't installed and you use Form
+  expect_files: [fastapi/dependencies/utils.py]
+  expect_symbols: [ensure_multipart_is_installed]
+  expect_docs: [docs/en/docs/tutorial/request-forms.md]
+  kind: conceptual
+
+- question: how does fastapi turn an async generator endpoint into server sent events
+  expect_files: [fastapi/routing.py, fastapi/sse.py]
+  expect_symbols: [get_request_handler, EventSourceResponse, format_sse_event]
+  expect_docs: [docs/en/docs/tutorial/server-sent-events.md]
+  kind: conceptual
+
+- question: which middleware closes uploaded files after the request finishes
+  expect_files: [fastapi/middleware/asyncexitstack.py, fastapi/routing.py]
+  expect_symbols: [AsyncExitStackMiddleware, get_request_handler]
+  kind: conceptual
+
+- question: how does UploadFile plug into pydantic validation
+  expect_files: [fastapi/datastructures.py]
+  expect_symbols: [UploadFile.__get_pydantic_core_schema__, UploadFile._validate]
+  kind: conceptual
+
+- question: how does include_router apply prefix and tags to the routes it pulls in
+  expect_files: [fastapi/routing.py, fastapi/applications.py]
+  expect_symbols: [APIRouter.include_router, _RouterIncludeContext, _IncludedRouter]
+  expect_docs: [docs/en/docs/tutorial/bigger-applications.md]
+  kind: conceptual
+
+- question: what does the mount a frontend build feature do
+  expect_files: [fastapi/applications.py, fastapi/routing.py]
+  expect_symbols: [FastAPI.frontend, _resolve_frontend_check_dir]
+  expect_docs: [docs/en/docs/tutorial/frontend.md]
+  kind: conceptual
+
+- question: how are the openapi security schemes collected for an operation
+  expect_files: [fastapi/openapi/utils.py]
+  expect_symbols: [_get_openapi_security_definitions, _get_openapi_dependency_data]
+  kind: conceptual
+
+- question: how does fastapi serialize datetime and Decimal in responses
+  expect_files: [fastapi/encoders.py]
+  expect_symbols: [ENCODERS_BY_TYPE, isoformat, decimal_encoder]
+  expect_docs: [docs/en/docs/tutorial/encoder.md, docs/en/docs/tutorial/extra-data-types.md]
+  kind: conceptual
+
+- question: what are the pydantic models for the openapi spec
+  expect_files: [fastapi/openapi/models.py]
+  expect_symbols: [OpenAPI, Operation, Schema]
+  expect_docs: [docs/en/docs/reference/openapi/models.md]
+  kind: conceptual
+
+- question: how are the default swagger ui parameters merged with user ones
+  expect_files: [fastapi/openapi/docs.py]
+  expect_symbols: [swagger_ui_default_parameters, get_swagger_ui_html]
+  expect_docs: [docs/en/docs/how-to/configure-swagger-ui.md]
+  kind: conceptual
+
+- question: how do background tasks end up running after the response is sent
+  expect_files: [fastapi/background.py, fastapi/routing.py, fastapi/dependencies/utils.py]
+  expect_symbols: [BackgroundTasks, get_request_handler, Dependant.background_tasks_param_name]
+  expect_docs: [docs/en/docs/tutorial/background-tasks.md]
+  kind: conceptual
+
+- question: how does a query param typed as a list get all its values from the url
+  expect_files: [fastapi/dependencies/utils.py]
+  expect_symbols: [request_params_to_args, _get_multidict_value]
+  expect_docs: [docs/en/docs/tutorial/query-params-str-validations.md]
+  kind: conceptual
+
+- question: what is ResponseValidationError
+  expect_files: [fastapi/exceptions.py]
+  expect_symbols: [ResponseValidationError]
+  kind: identifier
+
+- question: HTTPBasic security
+  expect_files: [fastapi/security/http.py]
+  expect_symbols: [HTTPBasic]
+  kind: identifier
+
+- question: analyze_param in dependencies utils
+  expect_files: [fastapi/dependencies/utils.py]
+  expect_symbols: [analyze_param]
+  kind: identifier
+
+- question: deep_dict_update
+  expect_files: [fastapi/utils.py]
+  expect_symbols: [deep_dict_update]
+  kind: identifier
+
+- question: OpenIdConnect class fastapi
+  expect_files: [fastapi/security/open_id_connect_url.py]
+  expect_symbols: [OpenIdConnect]
+  kind: identifier
+
+- question: how does fastapi know a parameter is a path param vs a query param
+  expect_files: [fastapi/dependencies/utils.py, fastapi/utils.py]
+  expect_symbols: [get_dependant, analyze_param, get_path_param_names]
+  expect_docs: [docs/en/docs/tutorial/query-params.md]
+  kind: conceptual
+
+- question: how does HTTPBasic decode the username and password out of the header
+  expect_files: [fastapi/security/http.py]
+  expect_symbols: [HTTPBasic.__call__, HTTPBasicCredentials]
+  expect_docs: [docs/en/docs/advanced/security/http-basic-auth.md]
+  kind: conceptual
+
+- question: is the openapi schema regenerated on every request to /openapi.json
+  expect_files: [fastapi/applications.py]
+  expect_symbols: [FastAPI.openapi]
+  expect_docs: [docs/en/docs/how-to/extending-openapi.md]
+  kind: conceptual
+
+- question: how does fastapi infer response_model from the return type annotation
+  expect_files: [fastapi/routing.py, fastapi/dependencies/utils.py]
+  expect_symbols: [_populate_api_route_state, get_typed_return_annotation]
+  expect_docs: [docs/en/docs/tutorial/response-model.md]
+  kind: conceptual
+
+- question: where does default_response_class get used when a route doesn't set response_class
+  expect_files: [fastapi/routing.py, fastapi/datastructures.py, fastapi/utils.py]
+  expect_symbols: [get_request_handler, DefaultPlaceholder, get_value_or_default]
+  expect_docs: [docs/en/docs/advanced/custom-response.md]
+  kind: conceptual
