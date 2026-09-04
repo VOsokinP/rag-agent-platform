@@ -455,6 +455,15 @@ def main(
     `transport` is injectable so tests can drive the real request-building and
     output formatting through httpx's MockTransport, with no server involved.
     """
+    # Answers are model output: em dashes, curly quotes, the occasional arrow.
+    # The Windows console is cp1252 by default, where those either print as a
+    # replacement box or raise UnicodeEncodeError and take the whole answer
+    # with them. `errors="replace"` keeps a terminal that genuinely cannot
+    # render a character from losing the rest of the text.
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure is not None:
+        reconfigure(encoding="utf-8", errors="replace")
+
     args = build_parser().parse_args(argv)
     return args.handler(args, transport)
 

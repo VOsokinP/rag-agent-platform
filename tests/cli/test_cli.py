@@ -6,6 +6,7 @@ or any network access.
 """
 
 import json
+import sys
 
 import httpx
 
@@ -379,3 +380,26 @@ def test_query_no_retrieval_sends_the_flag_and_labels_the_answer(capsys):
     assert sent["body"]["retrieval"] is False
     assert "Yes, pydantic.v1 works fine." in out
     assert "no retrieval" in out.lower()
+
+
+def test_main_switches_stdout_to_utf8(monkeypatch):
+    """Model answers carry smart quotes and dashes; the console defaults to cp1252.
+
+    Without this the first curly apostrophe in an answer prints as a replacement
+    box, or raises UnicodeEncodeError and loses the answer entirely.
+    """
+    calls = []
+
+    class RecordingStdout:
+        def reconfigure(self, **kwargs):
+            calls.append(kwargs)
+
+        def write(self, text):
+            return len(text)
+
+        def flush(self):
+            pass
+
+    monkeypatch.setattr(sys, "stdout", RecordingStdout())
+    cli.main(["health"], transport=transport_returning({"status": "ok"}))
+    assert calls == [{"encoding": "utf-8", "errors": "replace"}]
