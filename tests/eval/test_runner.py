@@ -16,9 +16,10 @@ def chunk(file_path, score_value=0.5):
     )
 
 
-def question(text, files, kind="identifier"):
+def question(text, files, kind="identifier", docs=()):
     return GoldenQuestion(
-        question=text, expect_files=tuple(files), expect_symbols=(), kind=kind
+        question=text, expect_files=tuple(files), expect_symbols=(),
+        expect_docs=tuple(docs), kind=kind,
     )
 
 
@@ -115,3 +116,33 @@ def test_score_over_no_results_is_all_zero():
     assert scores.n == 0
     assert scores.mrr == 0.0
     assert scores.recall[5] == 0.0
+
+
+def test_a_docs_page_counts_as_a_hit():
+    """Retrieval that answers a conceptual question from the documentation is
+    right, not wrong. Scoring it as a miss would make Milestone 2 look like it
+    improved conceptual retrieval while it was suppressing the best answers."""
+    questions = [question("q1", ["a.py"], kind="conceptual", docs=["docs/d.md"])]
+    retrieve = retriever_returning({"q1": ["z.py", "docs/d.md"]})
+
+    report = run_eval(questions, retrieve, embedding_model="m")
+
+    assert report.results[0].rank == 2
+    assert report.overall.recall[5] == 1.0
+
+
+def test_the_report_records_which_side_the_hit_came_from():
+    """The diagnostic that would have caught this whole defect: a shift from
+    docs hits to code hits is exactly what hybrid search does."""
+    questions = [
+        question("q1", ["a.py"], kind="conceptual", docs=["docs/d.md"]),
+        question("q2", ["b.py"], kind="conceptual", docs=["docs/e.md"]),
+        question("q3", ["c.py"], kind="conceptual", docs=["docs/f.md"]),
+    ]
+    retrieve = retriever_returning({
+        "q1": ["docs/d.md"], "q2": ["b.py"], "q3": ["zzz.py"],
+    })
+
+    report = run_eval(questions, retrieve, embedding_model="m")
+
+    assert [r.hit_source for r in report.results] == ["docs", "code", None]

@@ -14,6 +14,7 @@ from typing import Any
 import yaml
 
 KINDS = ("identifier", "conceptual")
+KEYS = frozenset({"question", "expect_files", "expect_docs", "expect_symbols", "kind"})
 
 
 class GoldenSetError(ValueError):
@@ -28,11 +29,16 @@ class GoldenQuestion:
     `file_path` is in this tuple. `expect_symbols` is recorded and deliberately
     *not* scored -- chunk boundaries move whenever the chunker changes, so a
     symbol-level metric would measure the chunker rather than retrieval.
+    `expect_docs` is scored exactly like `expect_files` -- the corpus is two
+    thirds documentation, and a conceptual question answered from a docs page is
+    answered correctly. It is a separate key rather than more entries in
+    `expect_files` so the report can say which side of the corpus a hit came from.
     """
 
     question: str
     expect_files: tuple[str, ...]
     expect_symbols: tuple[str, ...]
+    expect_docs: tuple[str, ...]
     kind: str
 
 
@@ -61,10 +67,37 @@ def load_golden(path: Path) -> list[GoldenQuestion]:
     return questions
 
 
+def _paths(entry: Any, key: str, where: str, required: bool) -> tuple[str, ...]:
+    """Validate one list-of-repo-relative-paths key."""
+    values = entry.get(key) or []
+    if not isinstance(values, list) or (required and not values):
+        raise GoldenSetError(f"{where} has no {key}; it could only ever score zero")
+    for value in values:
+        if not isinstance(value, str) or not value.strip():
+            raise GoldenSetError(f"{where} has a blank entry in {key}")
+        if value.startswith("/") or ".." in Path(value).parts:
+            raise GoldenSetError(
+                f"{where}: {value!r} must be repo-relative. It is compared "
+                "against RetrievedChunk.file_path, which is always a repo-relative "
+                "posix path, so anything else can never match."
+            )
+    return tuple(values)
+
+
 def _entry(index: int, entry: Any, path: Path) -> GoldenQuestion:
     where = f"{path} entry {index}"
     if not isinstance(entry, dict):
         raise GoldenSetError(f"{where} must be a mapping, not {type(entry).__name__}")
+
+    unknown = sorted(set(entry) - KEYS)
+    if unknown:
+        # An entire relabelling pass once landed under a key nothing read,
+        # because unknown keys were ignored. Silence is the expensive failure
+        # here: the file looks right, the loader is happy, and the labels score
+        # nothing at all.
+        raise GoldenSetError(
+            f"{where} has unknown key(s) {unknown}; expected some of {sorted(KEYS)}"
+        )
 
     question = entry.get("question")
     if not isinstance(question, str) or not question.strip():
@@ -74,18 +107,8 @@ def _entry(index: int, entry: Any, path: Path) -> GoldenQuestion:
     if kind not in KINDS:
         raise GoldenSetError(f"{where} has kind {kind!r}; expected one of {list(KINDS)}")
 
-    files = entry.get("expect_files") or []
-    if not isinstance(files, list) or not files:
-        raise GoldenSetError(f"{where} has no expect_files; it could only ever score zero")
-    for file_path in files:
-        if not isinstance(file_path, str) or not file_path.strip():
-            raise GoldenSetError(f"{where} has a blank entry in expect_files")
-        if file_path.startswith("/") or ".." in Path(file_path).parts:
-            raise GoldenSetError(
-                f"{where}: {file_path!r} must be repo-relative. It is compared "
-                "against RetrievedChunk.file_path, which is always a repo-relative "
-                "posix path, so anything else can never match."
-            )
+    files = _paths(entry, "expect_files", where, required=True)
+    docs = _paths(entry, "expect_docs", where, required=False)
 
     symbols = entry.get("expect_symbols") or []
     if not isinstance(symbols, list):
@@ -93,7 +116,8 @@ def _entry(index: int, entry: Any, path: Path) -> GoldenQuestion:
 
     return GoldenQuestion(
         question=question.strip(),
-        expect_files=tuple(files),
+        expect_files=files,
         expect_symbols=tuple(str(symbol) for symbol in symbols),
+        expect_docs=docs,
         kind=kind,
     )

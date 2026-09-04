@@ -81,3 +81,45 @@ def test_rejects_a_top_level_mapping(tmp_path):
 def test_reports_a_missing_file_by_path(tmp_path):
     with pytest.raises(GoldenSetError, match="golden.yaml"):
         load_golden(tmp_path / "golden.yaml")
+
+
+DOCS = """\
+- question: what does Depends do?
+  expect_files: [fastapi/params.py]
+  expect_docs: [docs/en/docs/tutorial/dependencies/index.md]
+  kind: conceptual
+"""
+
+
+def test_expect_docs_is_loaded(tmp_path):
+    """Docs are two thirds of the corpus; a label the loader drops is a label
+    that silently does nothing."""
+    questions = load_golden(write(tmp_path, DOCS))
+    assert questions[0].expect_docs == ("docs/en/docs/tutorial/dependencies/index.md",)
+
+
+def test_expect_docs_defaults_to_empty(tmp_path):
+    """Not every question has a docs page, and that is a real answer."""
+    questions = load_golden(write(tmp_path, VALID))
+    assert questions[0].expect_docs == ()
+
+
+def test_rejects_a_docs_path_that_is_not_repo_relative(tmp_path):
+    text = (
+        "- question: q\n  expect_files: [a.py]\n"
+        "  expect_docs: ['/docs/x.md']\n  kind: conceptual\n"
+    )
+    with pytest.raises(GoldenSetError, match="repo-relative"):
+        load_golden(write(tmp_path, text))
+
+
+def test_rejects_an_unknown_key(tmp_path):
+    """The whole point. `expect_docs` was silently discarded for an entire
+    relabelling pass because unknown keys were ignored; a typo'd key name must
+    fail loudly rather than quietly scoring nothing."""
+    text = (
+        "- question: q\n  expect_files: [a.py]\n"
+        "  expect_dcos: [docs/x.md]\n  kind: identifier\n"
+    )
+    with pytest.raises(GoldenSetError, match="expect_dcos"):
+        load_golden(write(tmp_path, text))

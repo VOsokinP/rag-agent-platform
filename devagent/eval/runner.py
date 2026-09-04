@@ -43,13 +43,17 @@ class QuestionResult:
     before/after is a paired comparison over the same questions, which is far
     more sensitive at this sample size than two aggregate means, and a
     regression that names three questions is diagnosable where a moved average
-    is not.
+    is not. `hit_source` records which side of the corpus the first hit came
+    from -- `"code"`, `"docs"`, or `None`. Recorded because a shift between the
+    two is precisely what hybrid search causes, and an aggregate recall number
+    hides it entirely.
     """
 
     question: str
     kind: str
     rank: int | None
     retrieved_files: tuple[str, ...]
+    hit_source: str | None
 
 
 @dataclass(frozen=True)
@@ -94,12 +98,20 @@ def run_eval(
     for question in questions:
         chunks = retrieve(question.question)
         retrieved_files = tuple(chunk.file_path for chunk in chunks)
+        expected_code = set(question.expect_files)
+        expected_docs = set(question.expect_docs)
+        rank = first_hit_rank(retrieved_files, expected_code | expected_docs)
+        hit_source = None
+        if rank is not None:
+            hit = retrieved_files[rank - 1]
+            hit_source = "docs" if hit in expected_docs else "code"
         results.append(
             QuestionResult(
                 question=question.question,
                 kind=question.kind,
-                rank=first_hit_rank(retrieved_files, set(question.expect_files)),
+                rank=rank,
                 retrieved_files=retrieved_files,
+                hit_source=hit_source,
             )
         )
 
