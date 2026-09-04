@@ -15,7 +15,7 @@ that exceeds it is split on line boundaries.
 import ast
 import logging
 
-from devagent.ingestion.chunker import CODE, Chunk
+from devagent.ingestion.chunker import CODE, Chunk, pack
 
 logger = logging.getLogger(__name__)
 
@@ -110,34 +110,17 @@ def _split_oversized_chunk(chunk: Chunk, max_chars: int) -> list[Chunk]:
         return [chunk]
 
     lines = chunk.text.split("\n")
-    pieces: list[Chunk] = []
-    buffer: list[str] = []
-    length = 0
-    offset = 0
-
-    def flush(next_offset: int) -> None:
-        nonlocal buffer, length, offset
-        if buffer:
-            pieces.append(
-                Chunk(
-                    file_path=chunk.file_path,
-                    symbol=chunk.symbol,
-                    kind=chunk.kind,
-                    start_line=chunk.start_line + offset,
-                    end_line=chunk.start_line + offset + len(buffer) - 1,
-                    text="\n".join(buffer),
-                )
-            )
-        buffer, length, offset = [], 0, next_offset
-
-    for index, line in enumerate(lines):
-        if buffer and length + len(line) + 1 > max_chars:
-            flush(index)
-        buffer.append(line)
-        length += len(line) + 1
-    flush(len(lines))
-
-    return pieces
+    return [
+        Chunk(
+            file_path=chunk.file_path,
+            symbol=chunk.symbol,
+            kind=chunk.kind,
+            start_line=chunk.start_line + start,
+            end_line=chunk.start_line + stop - 1,
+            text="\n".join(lines[start:stop]),
+        )
+        for start, stop in pack(lines, max_chars, separator_len=1)
+    ]
 
 
 def _start_line(node: ast.stmt) -> int:

@@ -15,7 +15,7 @@ can never point into a different section or past the end of the file.
 
 import re
 
-from devagent.ingestion.chunker import DOC, Chunk
+from devagent.ingestion.chunker import DOC, Chunk, pack
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.*\S)\s*$")
 _FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
@@ -159,29 +159,25 @@ def _split_paragraph(paragraph: str, max_chars: int) -> list[str]:
         return [paragraph]
 
     pieces: list[str] = []
-    buffer: list[str] = []
-    length = 0
+    run: list[str] = []
 
-    def flush_buffer() -> None:
-        nonlocal buffer, length
-        if buffer:
-            pieces.append("\n".join(buffer))
-            buffer, length = [], 0
+    def flush_run() -> None:
+        """Emit whatever has accumulated since the last hard-cut line."""
+        for start, stop in pack(run, max_chars, separator_len=1):
+            pieces.append("\n".join(run[start:stop]))
+        run.clear()
 
     for line in paragraph.split("\n"):
         if len(line) > max_chars:
-            flush_buffer()
+            flush_run()
             pieces.extend(
                 line[start : start + max_chars]
                 for start in range(0, len(line), max_chars)
             )
             continue
-        if buffer and length + len(line) + 1 > max_chars:
-            flush_buffer()
-        buffer.append(line)
-        length += len(line) + 1
+        run.append(line)
 
-    flush_buffer()
+    flush_run()
     return pieces
 
 
@@ -193,29 +189,21 @@ def _split_oversized(text: str, max_chars: int) -> list[tuple[str, int]]:
     if len(text) <= max_chars:
         return [(text, 0)]
 
-    pieces: list[tuple[str, int]] = []
-    buffer: list[str] = []
-    buffer_len = 0
-    offset = 0
-    consumed_lines = 0
-
-    oversized_expanded = [
+    paragraphs = [
         piece
         for paragraph in text.split("\n\n")
         for piece in _split_paragraph(paragraph, max_chars)
     ]
-    for paragraph in oversized_expanded:
-        addition = len(paragraph) + 2
-        if buffer and buffer_len + addition > max_chars:
-            joined = "\n\n".join(buffer)
-            pieces.append((joined, offset))
-            consumed_lines += joined.count("\n") + 2
-            offset = consumed_lines
-            buffer, buffer_len = [], 0
-        buffer.append(paragraph)
-        buffer_len += addition
 
-    if buffer:
-        pieces.append(("\n\n".join(buffer), offset))
+    pieces: list[tuple[str, int]] = []
+    consumed_lines = 0
+    offset = 0
+    for start, stop in pack(paragraphs, max_chars, separator_len=2):
+        joined = "\n\n".join(paragraphs[start:stop])
+        pieces.append((joined, offset))
+        # A paragraph break is two lines of source, so a piece consumes its
+        # own newlines plus the blank line that followed it.
+        consumed_lines += joined.count("\n") + 2
+        offset = consumed_lines
 
     return pieces
