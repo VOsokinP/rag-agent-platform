@@ -1,0 +1,11 @@
+diff --git a/fastapi/params.py b/fastapi/params.py
+--- a/fastapi/params.py
++++ b/fastapi/params.py
+@@ -1,6 +1,7 @@
+ import warnings
+ from collections.abc import Callable, Sequence
+ from dataclasses import dataclass
++from fastapi.params import ThisDoesNotExist
+ from enum import Enum
+ from typing import Annotated, Any, Literal
+ 
