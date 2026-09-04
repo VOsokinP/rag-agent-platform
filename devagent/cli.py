@@ -44,9 +44,12 @@ START_SERVER_HINT = "Start it with:\n    uvicorn devagent.api.main:app --reload"
 
 
 SYMBOL_WIDTH = 60
+# Tool results get more room than a table column: they are printed one per
+# line, with nothing to stay aligned with.
+RESULT_WIDTH = 100
 
 
-def _shorten(symbol: str) -> str:
+def _shorten(symbol: str, width: int = SYMBOL_WIDTH) -> str:
     """Trim a symbol to a width the table can hold.
 
     Markdown chunks use their full heading path as the symbol, which routinely
@@ -56,9 +59,20 @@ def _shorten(symbol: str) -> str:
     purpose: the Windows console defaults to cp1252, where a Unicode ellipsis
     prints as a replacement box or raises UnicodeEncodeError outright.
     """
-    if len(symbol) <= SYMBOL_WIDTH:
+    if len(symbol) <= width:
         return symbol
-    return symbol[: SYMBOL_WIDTH - 3].rstrip() + "..."
+    return symbol[: width - 3].rstrip() + "..."
+
+
+def _headline(result: str) -> str:
+    """The first line of a tool result, which is where every tool puts its verdict.
+
+    `run_tests` returns a summary line followed by the pytest output tail, and a
+    one-line-per-step list can hold only the summary. Truncating the whole blob
+    on width instead cut the counts and the duration off the end -- the two
+    things that distinguish a test that ran from a model that guessed.
+    """
+    return _shorten(result.split("\n", 1)[0], RESULT_WIDTH)
 
 
 def _fail(message: str) -> int:
@@ -213,7 +227,7 @@ def _ask(args, transport) -> int:
         print("\nSteps:")
         for number, step in enumerate(steps, start=1):
             print(
-                f"  {number}. {step['tool']}({step['input']}) -> {_shorten(step['result'])}"
+                f"  {number}. {step['tool']}({step['input']}) -> {_headline(step['result'])}"
             )
 
     usage = payload.get("usage") or {}

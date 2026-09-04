@@ -322,3 +322,33 @@ def test_ask_has_no_read_timeout():
         ["ask", "q"], transport=transport_returning(AGENT_PAYLOAD, capture=captured)
     )
     assert captured[0].extensions["timeout"]["read"] is None
+
+
+def test_ask_keeps_a_tool_results_headline(capsys):
+    """The counts and the wall-clock time are what say the tests really ran."""
+    payload = dict(AGENT_PAYLOAD)
+    summary = "tests/test_params_repr.py: no failures, 26 passed in 10.7s (exit 0)"
+    payload["steps"] = [
+        {
+            "tool": "run_tests",
+            "input": "target=tests/test_params_repr.py",
+            "result": summary
+            + "\n"
+            + "\n".join(f"line {i} of pytest output" for i in range(40)),
+        }
+    ]
+    cli.main(["ask", "did it break?"], transport=transport_returning(payload))
+    out = capsys.readouterr().out
+    assert summary in out
+    assert "line 0 of pytest output" not in out, (
+        "the tail belongs in the answer, not the step list"
+    )
+
+
+def test_ask_shortens_an_overlong_headline(capsys):
+    payload = dict(AGENT_PAYLOAD)
+    payload["steps"] = [{"tool": "search_code", "input": "q", "result": "x" * 400}]
+    cli.main(["ask", "q"], transport=transport_returning(payload))
+    out = capsys.readouterr().out
+    assert "..." in out
+    assert len(max(out.splitlines(), key=len)) < 140
