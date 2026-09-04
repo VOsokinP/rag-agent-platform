@@ -33,12 +33,19 @@ def _scores(scores: Scores) -> dict[str, Any]:
     }
 
 
-def to_baseline(report: Report, recorded: str) -> dict[str, Any]:
+def to_baseline(
+    report: Report,
+    recorded: str,
+    repo: str | None = None,
+    corpus_commit: str | None = None,
+) -> dict[str, Any]:
     """Render a Report as the committed baseline document."""
     return {
         "recorded": recorded,
         "embedding_model": report.embedding_model,
         "k": report.k,
+        "repo": repo,
+        "corpus_commit": corpus_commit,
         "overall": _scores(report.overall),
         "by_kind": {kind: _scores(scores) for kind, scores in report.by_kind.items()},
         # Per question, not just aggregates. This is what makes Milestone 2's
@@ -58,7 +65,7 @@ def load_baseline(path: Path) -> dict[str, Any]:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def check(report: Report, baseline: dict[str, Any]) -> list[str]:
+def check(report: Report, baseline: dict[str, Any], *, repo: str | None = None) -> list[str]:
     """Return one string per gate failure. An empty list means the gate passed."""
     failures = []
 
@@ -71,11 +78,36 @@ def check(report: Report, baseline: dict[str, Any]) -> list[str]:
             "and re-baseline rather than reading this as a regression."
         )
 
-    floor = baseline["overall"]["recall"][str(GATE_K)]
-    current = report.overall.recall[GATE_K]
-    if current < floor - TOLERANCE:
+    recorded_k = baseline.get("k")
+    if recorded_k != report.k:
         failures.append(
-            f"recall@{GATE_K} fell to {current:.2f} from a recorded {floor:.2f} "
-            f"(tolerance {TOLERANCE:.2f})"
+            f"retrieval depth changed: baseline recorded k={recorded_k}, this run "
+            f"used k={report.k}. recall@{GATE_K} is not comparable across depths -- "
+            "re-run at the recorded k, or re-baseline deliberately."
         )
+
+    recorded_repo = baseline.get("repo")
+    if recorded_repo != repo:
+        failures.append(
+            f"corpus changed: baseline recorded repo {recorded_repo!r}, this run "
+            f"used {repo!r}. These are different corpora, so the numbers are not "
+            "comparable."
+        )
+    # `corpus_commit` is recorded but deliberately not gated here: a re-ingest at
+    # a newer commit is an expected, legitimate move whose numbers are supposed
+    # to change, and failing on it would make the gate cry wolf.
+
+    floor = baseline.get("overall", {}).get("recall", {}).get(str(GATE_K))
+    if floor is None:
+        failures.append(
+            f"baseline has no overall recall@{GATE_K}; it is malformed or from "
+            "an older format -- re-record it"
+        )
+    else:
+        current = report.overall.recall[GATE_K]
+        if current < floor - TOLERANCE:
+            failures.append(
+                f"recall@{GATE_K} fell to {current:.2f} from a recorded {floor:.2f} "
+                f"(tolerance {TOLERANCE:.2f})"
+            )
     return failures

@@ -109,3 +109,78 @@ def test_a_changed_hit_source_does_not_fail_the_gate():
     baseline = to_baseline(report_with({"conceptual": [1]}), recorded="2026-09-03")
     moved = report_with({"conceptual": [1]})
     assert check(moved, baseline) == []
+
+
+def test_an_identical_k_passes():
+    report = report_with({"identifier": [1, 3]})
+    assert check(report, to_baseline(report, recorded="2026-09-03")) == []
+
+
+def test_a_differing_k_fails_and_names_both_depths():
+    baseline = to_baseline(report_with({"identifier": [1]}), recorded="2026-09-03")
+    deeper = report_with({"identifier": [1]})
+    object.__setattr__(deeper, "k", 20)
+
+    failures = check(deeper, baseline)
+
+    assert any("k=10" in f and "k=20" in f for f in failures)
+
+
+def test_a_k_change_is_reported_separately_from_a_recall_drop():
+    """A red gate has to say which of the two kinds of red it is, the same
+    way it already does for a moved embedding model."""
+    baseline = to_baseline(report_with({"identifier": [1] * 100}), recorded="2026-09-03")
+    worse_and_deeper = report_with({"identifier": [1] * 90 + [None] * 10})
+    object.__setattr__(worse_and_deeper, "k", 20)
+
+    failures = check(worse_and_deeper, baseline)
+
+    assert len(failures) == 2
+    assert any("retrieval depth" in f for f in failures)
+    assert any("recall@5" in f for f in failures)
+
+
+def test_to_baseline_records_repo_and_corpus_commit():
+    report = report_with({"identifier": [1]})
+    payload = to_baseline(
+        report, recorded="2026-09-03", repo="fastapi", corpus_commit="abc123"
+    )
+    assert payload["repo"] == "fastapi"
+    assert payload["corpus_commit"] == "abc123"
+
+
+def test_a_matching_repo_passes():
+    report = report_with({"identifier": [1]})
+    baseline = to_baseline(report, recorded="2026-09-03", repo="fastapi")
+    assert check(report, baseline, repo="fastapi") == []
+
+
+def test_a_differing_repo_fails_and_names_both():
+    report = report_with({"identifier": [1]})
+    baseline = to_baseline(report, recorded="2026-09-03", repo="fastapi")
+
+    failures = check(report, baseline, repo="other-repo")
+
+    assert any("fastapi" in f and "other-repo" in f for f in failures)
+
+
+def test_a_differing_corpus_commit_does_not_fail_the_gate():
+    """A re-ingest at a new commit is an expected, deliberate move -- gating on
+    it would make the gate cry wolf, which is what it exists to avoid."""
+    report = report_with({"identifier": [1]})
+    baseline = to_baseline(
+        report, recorded="2026-09-03", repo="fastapi", corpus_commit="old-sha"
+    )
+    moved = report_with({"identifier": [1]})
+
+    assert check(moved, baseline, repo="fastapi") == []
+
+
+def test_a_baseline_missing_the_recall_floor_fails_instead_of_raising():
+    report = report_with({"identifier": [1]})
+    baseline = to_baseline(report, recorded="2026-09-03")
+    del baseline["overall"]["recall"]["5"]
+
+    failures = check(report, baseline)
+
+    assert any("recall@5" in f for f in failures)
