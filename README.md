@@ -12,7 +12,7 @@ Target repository: [`fastapi/fastapi`](https://github.com/fastapi/fastapi).
 
 ## Status
 
-Ingestion, the RAG core, and the agent loop are complete and unit-verified: 266 unit
+Ingestion, the RAG core, and the agent loop are complete and unit-verified: 282 unit
 tests pass with no network, database, Docker, or API key. `pytest -m integration` now
 also runs the retrieval regression gate described under Evaluation below.
 
