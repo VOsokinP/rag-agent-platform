@@ -26,14 +26,16 @@ def ingested():
     init_db()
     repo_dir = ensure_repo(settings.repo_url, settings.repo_dir)
     with session_scope() as session:
-        result = ingest(REPO, repo_dir, get_provider(), session)
+        result = ingest(
+            REPO, repo_dir, get_provider(), session, settings.include_globs
+        )
     return result
 
 
 def test_clone_produces_source_files():
     settings = get_settings()
     repo_dir = ensure_repo(settings.repo_url, settings.repo_dir)
-    files = list(iter_source_files(repo_dir))
+    files = list(iter_source_files(repo_dir, settings.include_globs))
     assert len(files) > 100
 
 

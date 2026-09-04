@@ -1,8 +1,11 @@
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from devagent.ingestion.clone import ensure_repo, iter_source_files
+
+FASTAPI_GLOBS = ("fastapi/**/*.py", "docs/en/docs/**/*.md")
 
 
 @pytest.fixture
@@ -34,7 +37,7 @@ def fake_repo(tmp_path: Path) -> Path:
 
 
 def relative_paths(repo: Path) -> set[str]:
-    return {rel for _, rel in iter_source_files(repo)}
+    return {rel for _, rel in iter_source_files(repo, FASTAPI_GLOBS)}
 
 
 def test_includes_package_python_files(fake_repo):
@@ -66,7 +69,7 @@ def test_excludes_top_level_readme(fake_repo):
 
 
 def test_yields_absolute_paths_that_exist(fake_repo):
-    for absolute, _ in iter_source_files(fake_repo):
+    for absolute, _ in iter_source_files(fake_repo, FASTAPI_GLOBS):
         assert absolute.is_absolute()
         assert absolute.exists()
 
@@ -98,12 +101,12 @@ def test_ensure_repo_accepts_a_directory_with_a_git_dir(tmp_path):
 def test_duplicate_physical_files_are_yielded_once(fake_repo, monkeypatch):
     """A path reachable twice must not be ingested twice."""
     real = fake_repo / "fastapi" / "routing.py"
-    seen_paths = [absolute for absolute, _ in iter_source_files(fake_repo)]
+    seen_paths = [absolute for absolute, _ in iter_source_files(fake_repo, FASTAPI_GLOBS)]
     assert seen_paths.count(real.resolve()) == 1
 
 
 def test_relative_label_matches_the_yielded_absolute_path(fake_repo):
-    for absolute, relative in iter_source_files(fake_repo):
+    for absolute, relative in iter_source_files(fake_repo, FASTAPI_GLOBS):
         assert absolute == (fake_repo.resolve() / relative)
 
 
@@ -120,3 +123,31 @@ def test_failed_clone_removes_a_directory_it_created(tmp_path):
     with pytest.raises(RuntimeError):
         ensure_repo(str(tmp_path / "definitely-not-a-repo"), target)
     assert not target.exists(), "a partial clone we created must not be left behind"
+
+
+def test_globs_come_from_the_caller(fake_repo):
+    """The include patterns are configuration, not a property of this module."""
+    found = {rel for _, rel in iter_source_files(fake_repo, ("scripts/**/*.py",))}
+    assert found == {"scripts/build.py"}
+
+
+def _checkout_with_origin(directory: Path, origin: str) -> Path:
+    directory.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(directory)], check=True)
+    subprocess.run(
+        ["git", "-C", str(directory), "remote", "add", "origin", origin], check=True
+    )
+    return directory
+
+
+def test_ensure_repo_rejects_a_checkout_of_a_different_repo(tmp_path):
+    """Reuse must not silently ingest one repository under another's URL."""
+    checkout = _checkout_with_origin(tmp_path / "repo", "https://github.com/fastapi/fastapi")
+    with pytest.raises(RuntimeError, match="fastapi"):
+        ensure_repo("https://github.com/pallets/flask", checkout)
+
+
+def test_ensure_repo_reuses_a_checkout_of_the_same_repo(tmp_path):
+    """The ssh and https spellings of one remote are the same repository."""
+    checkout = _checkout_with_origin(tmp_path / "repo", "git@github.com:fastapi/fastapi.git")
+    assert ensure_repo("https://github.com/fastapi/fastapi", checkout) == checkout

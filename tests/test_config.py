@@ -38,3 +38,21 @@ def test_get_settings_is_cached(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5433/db")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     assert get_settings() is get_settings()
+
+
+def test_include_globs_default_to_the_fastapi_layout(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5433/db")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    settings = Settings()
+    assert settings.include_code_glob == "fastapi/**/*.py"
+    assert settings.include_docs_glob == "docs/en/docs/**/*.md"
+    assert settings.include_globs == ("fastapi/**/*.py", "docs/en/docs/**/*.md")
+
+
+def test_include_globs_follow_the_environment(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5433/db")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("INCLUDE_CODE_GLOB", "src/**/*.py")
+    monkeypatch.setenv("INCLUDE_DOCS_GLOB", "doc/**/*.md")
+    settings = Settings()
+    assert settings.include_globs == ("src/**/*.py", "doc/**/*.md")

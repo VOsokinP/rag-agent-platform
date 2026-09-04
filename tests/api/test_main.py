@@ -214,3 +214,17 @@ def test_ingest_reports_500_when_the_commit_fails(monkeypatch, tmp_path):
         assert "deadlock detected" in response.json()["detail"]
     finally:
         app.dependency_overrides.clear()
+
+
+def test_ingest_uses_the_configured_include_globs(monkeypatch, client, tmp_path):
+    """REPO_URL is only a real knob if file selection follows the configuration."""
+    package = tmp_path / "src"
+    package.mkdir()
+    (package / "y.py").write_text("def hi():\n    return 1\n", encoding="utf-8")
+    monkeypatch.setenv("INCLUDE_CODE_GLOB", "src/**/*.py")
+    monkeypatch.setattr(
+        "devagent.api.main.ensure_repo", lambda repo_url, target: tmp_path
+    )
+    response = client.post("/ingest", json={})
+    assert response.status_code == 200, response.text
+    assert response.json()["files_processed"] == 1

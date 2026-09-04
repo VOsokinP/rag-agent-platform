@@ -3,8 +3,17 @@ from pathlib import Path
 import pytest
 
 from devagent.ingestion.chunker import Chunk
-from devagent.ingestion.pipeline import IngestResult, build_rows, chunk_file, ingest
+from devagent.ingestion.pipeline import IngestResult, build_rows, chunk_file
+from devagent.ingestion.pipeline import ingest as _ingest
 from tests.fakes import FakeProvider
+
+FASTAPI_GLOBS = ("fastapi/**/*.py", "docs/en/docs/**/*.md")
+
+
+def ingest(repo, repo_dir, provider, session, **kwargs):
+    """`ingest` with the FastAPI include globs, which most tests do not vary."""
+    kwargs.setdefault("include_globs", FASTAPI_GLOBS)
+    return _ingest(repo, repo_dir, provider, session, **kwargs)
 
 
 @pytest.fixture
@@ -244,3 +253,15 @@ def test_upsert_deduplicates_colliding_conflict_keys():
     deduped = _dedupe_by_conflict_key(rows)
     assert len(deduped) == 2
     assert [row["text"] for row in deduped] == ["second", "third"]
+
+
+def test_ingest_only_walks_the_configured_globs(mini_repo):
+    """File selection is configuration; the pipeline does not pick it."""
+    result = ingest(
+        "fastapi/fastapi",
+        mini_repo,
+        FakeProvider(dimensions=8),
+        RecordingSession(),
+        include_globs=("docs/en/docs/**/*.md",),
+    )
+    assert result.files_processed == 1

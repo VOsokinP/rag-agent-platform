@@ -87,7 +87,9 @@ def ingest_endpoint(
         # single-operator local tool, but if DevAgent ever grew auth or accepted
         # arbitrary URLs with embedded credentials, this would need redaction.
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    result = ingest(repo_name, repo_dir, provider, session)
+    result = ingest(
+        repo_name, repo_dir, provider, session, settings.include_globs
+    )
 
     # Commit inside the request path, not in the dependency's exit code. An
     # exception raised while unwinding a `yield` dependency cannot change a

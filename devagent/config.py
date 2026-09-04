@@ -29,7 +29,18 @@ class Settings(BaseSettings):
 
     repo_url: str = "https://github.com/fastapi/fastapi"
     repo_dir: Path = Path("data/repos/fastapi")
+    # Which files of the checkout to ingest. These belong next to REPO_URL:
+    # pointing that at another project without them would ingest nothing, which
+    # is what made REPO_URL look like a knob without being one. The defaults are
+    # FastAPI's layout. The runner image stays pinned to FastAPI regardless — it
+    # bakes in that project's test dependencies.
+    include_code_glob: str = "fastapi/**/*.py"
+    include_docs_glob: str = "docs/en/docs/**/*.md"
     runner_image: str = "devagent-runner:fastapi"
+
+    @property
+    def include_globs(self) -> tuple[str, str]:
+        return (self.include_code_glob, self.include_docs_glob)
 
 
 @lru_cache

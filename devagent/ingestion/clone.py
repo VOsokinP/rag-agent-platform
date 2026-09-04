@@ -1,16 +1,33 @@
 """Acquiring the target repository and deciding which files to ingest."""
 
 import logging
+import re
 import shutil
 import subprocess
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-INCLUDE_CODE = "fastapi/**/*.py"
-INCLUDE_DOCS = "docs/en/docs/**/*.md"
-_INCLUDE_PATTERNS = (INCLUDE_CODE, INCLUDE_DOCS)
+
+def _remote_identity(url: str) -> str:
+    """Reduce a git URL to `host/path`, so its ssh and https spellings match."""
+    text = url.strip().lower().removesuffix(".git").rstrip("/")
+    text = re.sub(r"^[a-z][a-z0-9+.-]*://", "", text)
+    text = re.sub(r"^[^/@]+@", "", text)
+    return re.sub(r"[:/]+", "/", text)
+
+
+def _origin_url(repo_dir: Path) -> str | None:
+    """The checkout's origin remote, or None if it has none we can read."""
+    result = subprocess.run(
+        ["git", "-C", str(repo_dir), "remote", "get-url", "origin"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
 
 
 def _empty_directory(directory: Path) -> None:
@@ -30,10 +47,20 @@ def ensure_repo(repo_url: str, repo_dir: Path) -> Path:
     that exists but holds no `.git` is treated as an error rather than reused —
     that is what an interrupted clone leaves behind, and silently ingesting it
     produces an empty index with no failure anywhere.
+
+    Reuse is refused when the checkout's origin is a different repository:
+    changing `REPO_URL` without also changing `REPO_DIR` would otherwise
+    re-ingest the old checkout under the new repository's name.
     """
     repo_dir = Path(repo_dir)
 
     if (repo_dir / ".git").exists():
+        origin = _origin_url(repo_dir)
+        if origin is not None and _remote_identity(origin) != _remote_identity(repo_url):
+            raise RuntimeError(
+                f"{repo_dir} is a checkout of {origin}, not {repo_url}. "
+                "Point REPO_DIR at a different directory, or remove it."
+            )
         logger.info("Reusing existing checkout at %s", repo_dir)
         return repo_dir
 
@@ -67,8 +94,13 @@ def ensure_repo(repo_url: str, repo_dir: Path) -> Path:
     return repo_dir
 
 
-def iter_source_files(repo_dir: Path) -> Iterator[tuple[Path, str]]:
+def iter_source_files(
+    repo_dir: Path, include_globs: Sequence[str]
+) -> Iterator[tuple[Path, str]]:
     """Yield (absolute path, repo-relative posix path) for each file to ingest.
+
+    `include_globs` is passed in rather than known here: which files matter is a
+    property of the target repository, and so belongs to configuration.
 
     Paths are de-duplicated by their *resolved* location and anything resolving
     outside the repository is skipped, so a symlink cycle cannot yield the same
@@ -79,7 +111,7 @@ def iter_source_files(repo_dir: Path) -> Iterator[tuple[Path, str]]:
     repo_root = repo_dir.resolve()
     seen: set[Path] = set()
 
-    for pattern in _INCLUDE_PATTERNS:
+    for pattern in include_globs:
         for path in sorted(repo_dir.glob(pattern)):
             if not path.is_file():
                 continue

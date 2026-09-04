@@ -231,6 +231,13 @@ commit is expected to move the numbers, and calls for a deliberate
   request if any single input exceeds 8,192 tokens, so one oversized chunk would
   silently discard its whole batch. Oversized functions and Markdown sections are split;
   oversized classes become header chunks.
+- **Pointing it at another repository takes three settings, not one.** `REPO_URL`
+  selects what to clone, `INCLUDE_CODE_GLOB` and `INCLUDE_DOCS_GLOB` select which of its
+  files are indexed, and `REPO_DIR` has to move too — a checkout whose origin is a
+  different repository is refused rather than reused, because reusing it would re-ingest
+  the old corpus under the new repository's name. The sandbox runner image stays pinned
+  to FastAPI: it bakes in that project's test dependencies, so `run_tests` is
+  FastAPI-only by design.
 - **Re-ingestion is not atomic per repository, only per file.** A file's previously
   stored chunks are deleted only after its replacement chunks have been embedded
   successfully. If an embedding batch fails, the affected file's *older* chunks are

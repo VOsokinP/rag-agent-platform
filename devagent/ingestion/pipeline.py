@@ -1,6 +1,7 @@
 """Walk a checked-out repository, chunk it, embed it, and persist it."""
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -141,6 +142,7 @@ def ingest(
     repo_dir: Path,
     provider: Provider,
     session: Any,
+    include_globs: Sequence[str],
     batch_size: int = 100,
 ) -> IngestResult:
     """Chunk, embed, and upsert every included file in an existing checkout.
@@ -164,7 +166,7 @@ def ingest(
     empty_paths: list[str] = []
     files_processed = 0
 
-    for absolute, relative in iter_source_files(repo_dir):
+    for absolute, relative in iter_source_files(repo_dir, include_globs):
         files_processed += 1
         chunks = chunk_file(absolute, relative)
         if not chunks:

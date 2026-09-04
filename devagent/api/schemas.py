@@ -7,10 +7,9 @@ class IngestRequest(BaseModel):
     """Optionally override the label recorded on the ingested rows.
 
     Which repository is ingested is configured by `REPO_URL` in the environment,
-    not per request. A per-request URL would be a lie: the checkout directory
-    comes from settings and `ensure_repo` reuses any directory that already has a
-    `.git`, so pointing this at a second repository would ingest the first one's
-    files while labelling the rows with the second one's name.
+    not per request. A per-request URL would have nowhere to put the checkout —
+    the directory and the include globs both come from settings — so it could
+    only ever mislabel rows from the configured repository.
     """
 
     repo: str | None = Field(
