@@ -17,6 +17,7 @@ call; this one earns its place by being something only the operator would run.
 import argparse
 import json
 import os
+import subprocess
 import sys
 from datetime import date
 from pathlib import Path
@@ -255,7 +256,34 @@ def format_report(report: Report, kind: str | None = None) -> str:
     missed = sum(1 for r in shown if r.hit_source is None)
     lines += ["", f"hits: {code} code, {docs} docs, {missed} missed"]
 
+    if kind is not None:
+        # The table above is filtered; the gate below is not. Without this the
+        # operator reads a pass/fail verdict as if it were about the population
+        # on screen.
+        lines += ["", "(the gate is on overall recall@5, not the filtered population)"]
+
     return "\n".join(lines)
+
+
+def _corpus_empty(report: Report) -> bool:
+    """True when every question retrieved nothing -- the signature of an empty
+    or unreachable corpus, not a retrieval regression. `n == 0` is a different,
+    already-visible state (an empty golden set), so it is excluded here."""
+    return report.overall.n > 0 and all(not r.retrieved_files for r in report.results)
+
+
+def _corpus_commit(repo_dir: Path) -> str | None:
+    """The ingested checkout's HEAD, recorded so a baseline names the corpus it
+    measured. Best-effort: the checkout is a local artifact that may be absent,
+    and a baseline without it is still better than one that pins nothing."""
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(repo_dir), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return completed.stdout.strip() if completed.returncode == 0 else None
 
 
 def _eval(args, transport) -> int:
@@ -273,15 +301,27 @@ def _eval(args, transport) -> int:
     with session_scope() as session:
         report = run_eval(
             questions,
-            retriever(get_provider(), session, k=args.k),
+            retriever(get_provider(), session, repo=args.repo, k=args.k),
             embedding_model=settings.embedding_model,
             k=args.k,
         )
 
     print(format_report(report, kind=args.kind))
 
+    if _corpus_empty(report):
+        return _fail(
+            "\nEvery question retrieved nothing. The corpus is empty or "
+            "unreachable, not a retrieval regression -- ingest the repository "
+            "before running the gate:\n    devagent ingest"
+        )
+
     if args.record:
-        payload = to_baseline(report, recorded=str(date.today()))
+        payload = to_baseline(
+            report,
+            recorded=str(date.today()),
+            repo=args.repo,
+            corpus_commit=_corpus_commit(settings.repo_dir),
+        )
         Path(args.baseline).write_text(
             json.dumps(payload, indent=2) + "\n", encoding="utf-8"
         )
@@ -293,7 +333,7 @@ def _eval(args, transport) -> int:
         print(f"\nNo baseline at {args.baseline}; run with --record to create one.")
         return 0
 
-    failures = check(report, load_baseline(baseline_path))
+    failures = check(report, load_baseline(baseline_path), repo=args.repo)
     if failures:
         return _fail("\n" + "\n".join(f"FAIL: {failure}" for failure in failures))
     print("\nGate passed.")
@@ -337,6 +377,9 @@ def build_parser() -> argparse.ArgumentParser:
                           help=f"Chunks to retrieve (default: {RETRIEVAL_K}).")
     evaluate.add_argument("--kind", default=None, choices=list(KINDS),
                           help="Report only one population.")
+    evaluate.add_argument("--repo", default=None,
+                          help="Restrict retrieval to one ingested repo; omit to "
+                          "search every repo.")
     evaluate.add_argument("--golden", default="evals/golden.yaml",
                           help="Path to the labelled set.")
     evaluate.add_argument("--baseline", default="evals/baseline.json",
