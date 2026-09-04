@@ -141,11 +141,20 @@ devagent eval --record           # overwrite the baseline, then commit it
 ```
 
 `evals/baseline.json` records the floor, and `pytest -m integration` fails if
-overall recall@5 drops more than 0.02 below it. The baseline also stores the
-rank of every individual question and the embedding model that produced them —
-the ranks so a retrieval change can be compared question by question rather than
+overall recall@5 drops more than 0.02 below it. "Recall@k" here is really
+success@k: the fraction of *questions* with a hit somewhere in the top k, not
+the fraction of expected files retrieved. The baseline also stores the rank of
+every individual question and the embedding model that produced them — the
+ranks so a retrieval change can be compared question by question rather than
 as two averages, and the model because `text-embedding-3-small` is an alias whose
 snapshot can move underneath a corpus. A red gate says which of the two it is.
+
+The baseline also records which repo it was measured against and the commit
+that repo's checkout was at when the baseline was recorded. The gate fails if
+the repo changes — a different repo is a different corpus, and the numbers
+stop being comparable — but not if the commit does: a re-ingest at a newer
+commit is expected to move the numbers, and calls for a deliberate
+`devagent eval --record` rather than being read as a regression.
 
 ## Known characteristics
 

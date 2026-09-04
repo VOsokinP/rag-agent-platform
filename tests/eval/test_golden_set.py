@@ -51,4 +51,6 @@ def test_most_conceptual_questions_carry_a_docs_label():
     the set's header documents which."""
     conceptual = [q for q in load_golden(GOLDEN) if q.kind == "conceptual"]
     with_docs = [q for q in conceptual if q.expect_docs]
-    assert len(with_docs) >= MIN_CONCEPTUAL_WITH_DOCS * len(conceptual)
+    assert len(with_docs) >= MIN_CONCEPTUAL_WITH_DOCS * len(conceptual), (
+        f"{len(with_docs)} of {len(conceptual)} conceptual questions carry docs"
+    )
