@@ -6,15 +6,30 @@ works, `/query` works. The value it adds over a raw HTTP call is in the three
 places that path is easy to get wrong -- the read timeout on a long ingest, the
 `batches_failed` count that silently means stale content, and the difference
 between "the server is down" and "the corpus is empty".
+
+`devagent eval` is the one deliberate exception. It is an operator tool rather
+than a service feature -- it reads a labelled file off disk, spends money on
+embeddings, and gates a commit -- so it has no endpoint to drive and runs in
+process. Every other command earns its place by being something a client would
+call; this one earns its place by being something only the operator would run.
 """
 
 import argparse
+import json
 import os
 import sys
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 import httpx
+
+from devagent.config import get_settings
+from devagent.db.session import session_scope
+from devagent.eval.baseline import check, load_baseline, to_baseline
+from devagent.eval.dataset import KINDS, GoldenSetError, load_golden
+from devagent.eval.runner import KS, RETRIEVAL_K, Report, retriever, run_eval
+from devagent.llm.provider import get_provider
 
 DEFAULT_URL = "http://localhost:8000"
 
@@ -208,6 +223,83 @@ def _ask(args, transport) -> int:
     return 0
 
 
+def format_report(report: Report, kind: str | None = None) -> str:
+    """Render an eval report as a small table.
+
+    Every row carries `n=`. A recall figure without its sample size is how a
+    population too thin to resolve a change gets read as a result anyway.
+    """
+    rows = [("overall", report.overall)]
+    rows += [(name, scores) for name, scores in report.by_kind.items()]
+    if kind is not None:
+        rows = [(name, scores) for name, scores in rows if name == kind]
+
+    header = "  ".join(f"r@{k:<5}" for k in KS)
+    lines = [
+        f"model: {report.embedding_model}   retrieved k={report.k}",
+        "",
+        f"{'population':<12}  {'n':>5}  {header}  {'MRR':>6}",
+    ]
+    for name, scores in rows:
+        recalls = "  ".join(f"{scores.recall[k]:<7.2f}" for k in KS)
+        lines.append(
+            f"{name:<12}  n={scores.n:<3}  {recalls}  {scores.mrr:>6.3f}"
+        )
+
+    # Which half of the corpus answered. Hybrid search moves hits from docs to
+    # code, and an aggregate recall number hides that completely -- this line is
+    # the one that makes such a shift legible.
+    shown = [r for r in report.results if kind is None or r.kind == kind]
+    code = sum(1 for r in shown if r.hit_source == "code")
+    docs = sum(1 for r in shown if r.hit_source == "docs")
+    missed = sum(1 for r in shown if r.hit_source is None)
+    lines += ["", f"hits: {code} code, {docs} docs, {missed} missed"]
+
+    return "\n".join(lines)
+
+
+def _eval(args, transport) -> int:
+    """Run the golden set against retrieval in process.
+
+    `transport` is accepted and ignored so every handler keeps one signature.
+    There is no server to talk to: see the module docstring.
+    """
+    settings = get_settings()
+    try:
+        questions = load_golden(Path(args.golden))
+    except GoldenSetError as exc:
+        return _fail(str(exc))
+
+    with session_scope() as session:
+        report = run_eval(
+            questions,
+            retriever(get_provider(), session, k=args.k),
+            embedding_model=settings.embedding_model,
+            k=args.k,
+        )
+
+    print(format_report(report, kind=args.kind))
+
+    if args.record:
+        payload = to_baseline(report, recorded=str(date.today()))
+        Path(args.baseline).write_text(
+            json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+        )
+        print(f"\nRecorded {args.baseline}. Commit it deliberately.")
+        return 0
+
+    baseline_path = Path(args.baseline)
+    if not baseline_path.is_file():
+        print(f"\nNo baseline at {args.baseline}; run with --record to create one.")
+        return 0
+
+    failures = check(report, load_baseline(baseline_path))
+    if failures:
+        return _fail("\n" + "\n".join(f"FAIL: {failure}" for failure in failures))
+    print("\nGate passed.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="devagent", description="Talk to a running DevAgent server."
@@ -237,6 +329,21 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("--patch", default=None, help="Path to a unified diff to apply first.")
     ask.add_argument("-k", type=int, default=8, help="Chunks to retrieve (default: 8).")
     ask.set_defaults(handler=_ask)
+
+    evaluate = subparsers.add_parser(
+        "eval", help="Score retrieval against the labelled golden set."
+    )
+    evaluate.add_argument("-k", type=int, default=RETRIEVAL_K,
+                          help=f"Chunks to retrieve (default: {RETRIEVAL_K}).")
+    evaluate.add_argument("--kind", default=None, choices=list(KINDS),
+                          help="Report only one population.")
+    evaluate.add_argument("--golden", default="evals/golden.yaml",
+                          help="Path to the labelled set.")
+    evaluate.add_argument("--baseline", default="evals/baseline.json",
+                          help="Path to the recorded floor.")
+    evaluate.add_argument("--record", action="store_true",
+                          help="Overwrite the baseline with this run's numbers.")
+    evaluate.set_defaults(handler=_eval)
 
     return parser
 
