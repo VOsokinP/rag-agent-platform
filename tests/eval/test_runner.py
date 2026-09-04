@@ -131,6 +131,19 @@ def test_a_docs_page_counts_as_a_hit():
     assert report.overall.recall[5] == 1.0
 
 
+def test_retrieved_files_beyond_k_are_truncated():
+    """`k` on the Report has to describe what was actually scored, not just
+    what was asked for -- a retriever handing back more than k would otherwise
+    make the report claim a depth it did not use."""
+    questions = [question("q1", ["c.py"])]
+    retrieve = retriever_returning({"q1": ["a.py", "b.py", "c.py", "d.py"]})
+
+    report = run_eval(questions, retrieve, embedding_model="m", k=2)
+
+    assert report.results[0].retrieved_files == ("a.py", "b.py")
+    assert report.results[0].rank is None
+
+
 def test_the_report_records_which_side_the_hit_came_from():
     """The diagnostic that would have caught this whole defect: a shift from
     docs hits to code hits is exactly what hybrid search does."""

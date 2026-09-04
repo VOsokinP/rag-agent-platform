@@ -97,7 +97,7 @@ def run_eval(
     results = []
     for question in questions:
         chunks = retrieve(question.question)
-        retrieved_files = tuple(chunk.file_path for chunk in chunks)
+        retrieved_files = tuple(chunk.file_path for chunk in chunks)[:k]
         expected_code = set(question.expect_files)
         expected_docs = set(question.expect_docs)
         rank = first_hit_rank(retrieved_files, expected_code | expected_docs)
