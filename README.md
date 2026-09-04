@@ -12,8 +12,9 @@ Target repository: [`fastapi/fastapi`](https://github.com/fastapi/fastapi).
 
 ## Status
 
-Ingestion, the RAG core, and the agent loop are complete and unit-verified: 212 unit
-tests pass with no network, database, Docker, or API key.
+Ingestion, the RAG core, and the agent loop are complete and unit-verified: 266 unit
+tests pass with no network, database, Docker, or API key. `pytest -m integration` now
+also runs the retrieval regression gate described under Evaluation below.
 
 The end-to-end path is verified twice over.
 
@@ -127,6 +128,25 @@ every answer about a patch depends on.
 Both markers are deselected by default via the `not integration and not sandbox` marker
 expression in `pyproject.toml`, so a fresh clone runs the unit suite and nothing else.
 
+## Evaluation
+
+Retrieval is measured, not asserted. `evals/golden.yaml` holds hand-labelled
+questions over the ingested FastAPI corpus, split into `identifier` questions
+(mostly a literal name) and `conceptual` ones (about behaviour).
+
+```bash
+devagent eval                    # the table, then the regression gate
+devagent eval --kind identifier  # one population
+devagent eval --record           # overwrite the baseline, then commit it
+```
+
+`evals/baseline.json` records the floor, and `pytest -m integration` fails if
+overall recall@5 drops more than 0.02 below it. The baseline also stores the
+rank of every individual question and the embedding model that produced them —
+the ranks so a retrieval change can be compared question by question rather than
+as two averages, and the model because `text-embedding-3-small` is an alias whose
+snapshot can move underneath a corpus. A red gate says which of the two it is.
+
 ## Known characteristics
 
 - **The embedding index is HNSW, deliberately.** `init_db()` has to create the index
@@ -208,6 +228,13 @@ expression in `pyproject.toml`, so a fresh clone runs the unit suite and nothing
   left in place rather than deleted, so a partial ingest doesn't leave you with holes
   in retrievable content — but it does mean stale content can persist. Check
   `batches_failed` in the `/ingest` response to see whether this happened.
+- **The eval scores retrieval, not answers.** A hit is a retrieved chunk whose
+  file is one a human labelled as containing the answer. It says nothing about
+  whether the model then used that chunk well, and nothing about whether the
+  answer was faithful — that needs a judge model and is deliberately a separate
+  piece of work. Symbol labels are recorded and never scored: chunk boundaries
+  move whenever the chunker changes, so a symbol-level metric would measure the
+  chunker rather than retrieval.
 
 ## Architecture
 
