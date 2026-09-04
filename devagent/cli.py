@@ -193,7 +193,7 @@ def _query(args, transport) -> int:
     print(payload["answer"])
 
     citations = payload.get("citations") or []
-    if citations:
+    if citations and not args.brief:
         print("\nSources:")
         width = max(len(c["file_path"]) for c in citations)
         for citation in citations:
@@ -231,7 +231,7 @@ def _ask(args, transport) -> int:
     print(payload["answer"])
 
     steps = payload.get("steps") or []
-    if steps:
+    if steps and not args.brief:
         print("\nSteps:")
         for number, step in enumerate(steps, start=1):
             print(
@@ -368,6 +368,20 @@ def _eval(args, transport) -> int:
     return 0
 
 
+def _add_brief(parser: argparse.ArgumentParser) -> None:
+    """One flag, same meaning everywhere: drop the supporting table.
+
+    `query` and `ask` show different tables -- citations and tool calls -- but
+    "the answer without the table under it" is one idea, and one idea should
+    not cost the reader two flags to remember.
+    """
+    parser.add_argument(
+        "--brief",
+        action="store_true",
+        help="Answer only, without the sources or steps table.",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="devagent", description="Talk to a running DevAgent server."
@@ -398,6 +412,7 @@ def build_parser() -> argparse.ArgumentParser:
     query.add_argument(
         "--repo", default=None, help="Restrict retrieval to one repo label."
     )
+    _add_brief(query)
     query.add_argument(
         "--no-retrieval",
         dest="retrieval",
@@ -408,6 +423,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     ask = subparsers.add_parser("ask", help="Ask the agent, which can run tests.")
     ask.add_argument("question")
+    _add_brief(ask)
     ask.add_argument(
         "--patch", default=None, help="Path to a unified diff to apply first."
     )

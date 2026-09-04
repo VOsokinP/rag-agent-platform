@@ -149,6 +149,10 @@ same settings but no corpus and no citations, so the difference between the two 
 retrieval and nothing else. It is the one path that answers ungrounded, which ADR 005
 otherwise forbids, so every layer labels it as such.
 
+`--brief` drops the table under the answer — citations for `query`, tool calls for `ask`
+— when you want the answer on its own. Both print by default: an answer is worth what its
+sources are worth, so hiding them is the thing you opt into.
+
 `devagent ask` runs the agent rather than a single retrieval-and-answer pass. It can
 search the corpus, read files, blame lines, and run the repository's tests. Pass a
 unified diff with `--patch` to have it answer about code that does not exist yet.

@@ -403,3 +403,52 @@ def test_main_switches_stdout_to_utf8(monkeypatch):
     monkeypatch.setattr(sys, "stdout", RecordingStdout())
     cli.main(["health"], transport=transport_returning({"status": "ok"}))
     assert calls == [{"encoding": "utf-8", "errors": "replace"}]
+
+
+def test_query_brief_hides_the_table_but_keeps_the_answer(capsys):
+    payload = {
+        "answer": "Depends declares a dependency.",
+        "citations": [
+            {
+                "file_path": "fastapi/param_functions.py",
+                "symbol": "Depends",
+                "start_line": 10,
+                "end_line": 20,
+                "score": 0.7,
+            }
+        ],
+    }
+    cli.main(["query", "q", "--brief"], transport=transport_returning(payload))
+    out = capsys.readouterr().out
+    assert "Depends declares a dependency." in out
+    assert "Sources:" not in out
+    assert "fastapi/param_functions.py" not in out
+
+
+def test_query_shows_sources_by_default(capsys):
+    """Citations are the default because they are the claim being made."""
+    cli.main(["query", "q"], transport=transport_returning(ANSWER_PAYLOAD))
+    assert "Sources:" in capsys.readouterr().out
+
+
+def test_ask_brief_hides_steps_but_keeps_answer_and_usage(capsys):
+    cli.main(["ask", "q", "--brief"], transport=transport_returning(AGENT_PAYLOAD))
+    out = capsys.readouterr().out
+    assert "Yes - 3 tests fail." in out
+    assert "Steps:" not in out
+    assert "run_tests" not in out
+    assert "0.012" in out, "usage is one line, not a table, so --brief keeps it"
+
+
+def test_ask_shows_steps_by_default(capsys):
+    cli.main(["ask", "q"], transport=transport_returning(AGENT_PAYLOAD))
+    assert "Steps:" in capsys.readouterr().out
+
+
+def test_brief_means_the_same_thing_to_both_subcommands(capsys):
+    """One flag to remember: the supporting table goes, the answer stays."""
+    cli.main(["query", "q", "--brief"], transport=transport_returning(ANSWER_PAYLOAD))
+    query_out = capsys.readouterr().out
+    cli.main(["ask", "q", "--brief"], transport=transport_returning(AGENT_PAYLOAD))
+    ask_out = capsys.readouterr().out
+    assert "Sources:" not in query_out and "Steps:" not in ask_out
