@@ -70,7 +70,9 @@ def load_golden(path: Path) -> list[GoldenQuestion]:
 def _paths(entry: Any, key: str, where: str, required: bool) -> tuple[str, ...]:
     """Validate one list-of-repo-relative-paths key."""
     values = entry.get(key) or []
-    if not isinstance(values, list) or (required and not values):
+    if not isinstance(values, list):
+        raise GoldenSetError(f"{where} has a non-list {key}; it must be a list of paths")
+    if required and not values:
         raise GoldenSetError(f"{where} has no {key}; it could only ever score zero")
     for value in values:
         if not isinstance(value, str) or not value.strip():

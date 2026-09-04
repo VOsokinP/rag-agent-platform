@@ -113,6 +113,14 @@ def test_rejects_a_docs_path_that_is_not_repo_relative(tmp_path):
         load_golden(write(tmp_path, text))
 
 
+def test_rejects_a_non_list_expect_files_with_the_non_list_message(tmp_path):
+    """Forgetting the brackets is exactly the hand-editing mistake a person
+    makes, and it must be reported as that, not as an empty list."""
+    text = "- question: q\n  expect_files: a.py\n  kind: identifier\n"
+    with pytest.raises(GoldenSetError, match="non-list"):
+        load_golden(write(tmp_path, text))
+
+
 def test_rejects_an_unknown_key(tmp_path):
     """The whole point. `expect_docs` was silently discarded for an entire
     relabelling pass because unknown keys were ignored; a typo'd key name must
