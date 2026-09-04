@@ -21,16 +21,20 @@ $ devagent query "Can I still use pydantic.v1 models with FastAPI?" --no-retriev
 [no retrieval] answered from the model alone -- nothing grounds this.
 
 Yes, you can still use Pydantic v1 models with FastAPI. FastAPI is compatible with
-Pydantic v1, and you can define your data models using Pydantic v1 syntax. [...]
+Pydantic v1 [...] if you have existing code that uses Pydantic v1, it will continue to
+work with FastAPI.
 
 $ devagent query "Can I still use pydantic.v1 models with FastAPI?"
-You can still use `pydantic.v1` models with FastAPI if you are using versions between
-FastAPI 0.119.0 and 0.128.0 [...] using `pydantic.v1` models in newer versions of
-FastAPI will raise an error. In current versions, if you attempt to use a `pydantic.v1`
-model, you will encounter a `PydanticV1NotSupportedError` (fastapi/exceptions.py).
+You can still use `pydantic.v1` models with FastAPI only if you are using versions of
+FastAPI between 0.119.0 and 0.128.0, as this temporary support was removed in version
+0.128.0. In current versions of FastAPI, using a `pydantic.v1` model will raise an error
+(docs/en/docs/how-to/migrate-from-pydantic-v1-to-pydantic-v2.md). [...] a
+`PydanticV1NotSupportedError` will be raised when attempting to use `pydantic.v1` models
+(fastapi/exceptions.py).
 
 Sources:
   docs/en/docs/how-to/migrate-from-pydantic-v1-to-pydantic-v2.md    57-79  +0.69  Migrate from Pydantic v1 [...]
+  docs/en/docs/release-notes.md                                 4248-4254  +0.69  Release Notes > 0.100.0 > Pydantic v1
   docs/en/docs/features.md                                        178-201  +0.67  Features > Pydantic features
   fastapi/exceptions.py                                           246-249  +0.65  PydanticV1NotSupportedError
   [...]
@@ -39,11 +43,12 @@ Sources:
 Both runs use the same model — `gpt-4o-mini`, the configured `CHAT_MODEL` — with the same
 settings and the same question. The only variable is whether the corpus is in front of it.
 
-The first answer is fluent, confident, and would have you write code that raises at
-runtime: support for `pydantic.v1` was removed in FastAPI 0.128.0, years after the model's
-training data ends. The second gives the version it was removed in and names the error you
-get instead — and `PydanticV1NotSupportedError` really is in the checkout, at the lines
-the citation points to.
+The first answer is fluent, confident, and ends on a claim a reader would act on —
+existing Pydantic v1 code "will continue to work with FastAPI" — that is simply false:
+support was removed in FastAPI 0.128.0, years after the model's training data ends. The
+second gives the version window, the version it was removed in, and the error you get
+instead — and `PydanticV1NotSupportedError` really is in the checkout, at the lines the
+citation points to.
 
 That is the whole argument for retrieval on a codebase that moves: the corpus here is
 FastAPI 0.141.1, and no amount of prompting gets stale weights to a symbol they have
