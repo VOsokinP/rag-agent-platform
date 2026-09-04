@@ -29,6 +29,13 @@ class QueryRequest(BaseModel):
     question: str = Field(min_length=1)
     k: int = Field(default=8, ge=1, le=100)
     repo: str | None = None
+    retrieval: bool = Field(
+        default=True,
+        description=(
+            "Set false for the no-retrieval baseline: the model answers alone, "
+            "with no corpus and no citations."
+        ),
+    )
 
     @field_validator("question")
     @classmethod
@@ -52,6 +59,10 @@ class CitationOut(BaseModel):
 class QueryResponse(BaseModel):
     answer: str
     citations: list[CitationOut]
+    # On the response as well as the request, so a stored or forwarded answer
+    # still says whether anything grounded it. Empty citations do not: a
+    # grounded answer can legitimately cite nothing if every chunk was blank.
+    retrieval_used: bool = True
 
 
 class AgentRequest(BaseModel):

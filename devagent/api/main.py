@@ -8,7 +8,11 @@ from fastapi import Depends, FastAPI, HTTPException
 
 from devagent.agent.graph import run_agent
 from devagent.agent.tools import ToolContext
-from devagent.answer import EmptyCorpusError, answer_question
+from devagent.answer import (
+    EmptyCorpusError,
+    answer_question,
+    answer_without_retrieval,
+)
 from devagent.api.schemas import (
     AgentRequest,
     AgentResponse,
@@ -117,6 +121,10 @@ def query_endpoint(
     session: Any = Depends(get_session_dep),
 ) -> QueryResponse:
     """Answer a question about the ingested repository, with citations."""
+    if not request.retrieval:
+        baseline = answer_without_retrieval(request.question, provider)
+        return QueryResponse(answer=baseline.answer, citations=[], retrieval_used=False)
+
     chunks = search(request.question, provider, session, repo=request.repo, k=request.k)
     try:
         result = answer_question(request.question, chunks, provider)
@@ -126,6 +134,7 @@ def query_endpoint(
     return QueryResponse(
         answer=result.answer,
         citations=[CitationOut(**vars(citation)) for citation in result.citations],
+        retrieval_used=True,
     )
 
 

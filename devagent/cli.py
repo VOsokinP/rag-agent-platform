@@ -169,6 +169,8 @@ def _query(args, transport) -> int:
     body: dict[str, Any] = {"question": question, "k": args.k}
     if args.repo is not None:
         body["repo"] = args.repo
+    if not args.retrieval:
+        body["retrieval"] = False
 
     payload, status = _request(
         args.url, "POST", "/query", QUERY_TIMEOUT, transport, json=body
@@ -181,6 +183,12 @@ def _query(args, transport) -> int:
         )
     if status != 200:
         return _fail(_detail(payload, status))
+
+    # Before the answer, not after: the label has to be read first to be a
+    # label at all. An ungrounded answer that arrives looking like a grounded
+    # one is exactly what citations exist to prevent.
+    if payload.get("retrieval_used") is False:
+        print("[no retrieval] answered from the model alone -- nothing grounds this.\n")
 
     print(payload["answer"])
 
@@ -389,6 +397,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     query.add_argument(
         "--repo", default=None, help="Restrict retrieval to one repo label."
+    )
+    query.add_argument(
+        "--no-retrieval",
+        dest="retrieval",
+        action="store_false",
+        help="Baseline: answer from the model alone, with no corpus.",
     )
     query.set_defaults(handler=_query)
 

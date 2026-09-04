@@ -5,6 +5,8 @@ request-building and output formatting run without a server, a database, a key,
 or any network access.
 """
 
+import json
+
 import httpx
 
 from devagent import cli
@@ -352,3 +354,28 @@ def test_ask_shortens_an_overlong_headline(capsys):
     out = capsys.readouterr().out
     assert "..." in out
     assert len(max(out.splitlines(), key=len)) < 140
+
+
+def test_query_no_retrieval_sends_the_flag_and_labels_the_answer(capsys):
+    """An ungrounded answer must say so; it is a baseline, not a result."""
+    sent = {}
+
+    def transport_capturing(request):
+        sent["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "answer": "Yes, pydantic.v1 works fine.",
+                "citations": [],
+                "retrieval_used": False,
+            },
+        )
+
+    cli.main(
+        ["query", "can I use pydantic.v1?", "--no-retrieval"],
+        transport=httpx.MockTransport(transport_capturing),
+    )
+    out = capsys.readouterr().out
+    assert sent["body"]["retrieval"] is False
+    assert "Yes, pydantic.v1 works fine." in out
+    assert "no retrieval" in out.lower()

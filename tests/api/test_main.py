@@ -233,3 +233,27 @@ def test_ingest_uses_the_configured_include_globs(monkeypatch, client, tmp_path)
     response = client.post("/ingest", json={})
     assert response.status_code == 200, response.text
     assert response.json()["files_processed"] == 1
+
+
+def test_query_without_retrieval_skips_the_corpus(monkeypatch, client):
+    """The baseline must not quietly retrieve; that is the whole comparison."""
+
+    def fail(*args, **kwargs):
+        raise AssertionError("retrieval must not run when it was turned off")
+
+    monkeypatch.setattr("devagent.api.main.search", fail)
+    response = client.post(
+        "/query", json={"question": "can I use pydantic.v1?", "retrieval": False}
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["citations"] == []
+    assert body["retrieval_used"] is False
+
+
+def test_query_retrieves_by_default(client):
+    response = client.post("/query", json={"question": "what is Depends?"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["retrieval_used"] is True
+    assert body["citations"], "the default path must still cite what it was shown"

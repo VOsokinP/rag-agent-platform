@@ -5,6 +5,7 @@ from devagent.answer import (
     Citation,
     EmptyCorpusError,
     answer_question,
+    answer_without_retrieval,
     build_context,
 )
 from devagent.retrieval.vector_search import RetrievedChunk
@@ -151,3 +152,24 @@ def test_citations_name_only_the_chunks_the_model_was_shown():
     result = answer_question("q", [blank, make_chunk("Depends")], provider)
     assert len(result.citations) == 1
     assert result.citations[0].symbol == "Depends"
+
+
+def test_answer_without_retrieval_returns_no_citations():
+    """The baseline answers from the model alone, so it can cite nothing."""
+    provider = FakeProvider(answer="Yes, pydantic.v1 works fine.")
+    result = answer_without_retrieval("can I use pydantic.v1?", provider)
+    assert result.answer == "Yes, pydantic.v1 works fine."
+    assert result.citations == []
+
+
+def test_answer_without_retrieval_does_not_claim_a_context():
+    """The grounded prompt orders the model to answer only from context.
+
+    Reusing it with no context would be an instruction the request cannot
+    satisfy, so the baseline gets its own prompt.
+    """
+    provider = FakeProvider()
+    answer_without_retrieval("q", provider)
+    system, user = provider.complete_calls[0]
+    assert "context" not in system.lower()
+    assert user == "q"

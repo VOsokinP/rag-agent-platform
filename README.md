@@ -65,8 +65,14 @@ over the HTTP API, so anything it can do, any other client can do too:
 devagent health                              # is the server up?
 devagent ingest                              # clone, chunk, embed, store
 devagent query "what does Depends do?"       # answer, with sources
+devagent query "what does Depends do?" --no-retrieval   # the same model, no corpus
 devagent ask "what does Depends do?"         # same question, but with tools
 ```
+
+`--no-retrieval` is the control, not a feature: it answers with the same model and the
+same settings but no corpus and no citations, so the difference between the two runs is
+retrieval and nothing else. It is the one path that answers ungrounded, which ADR 005
+otherwise forbids, so every layer labels it as such.
 
 `devagent ask` runs the agent rather than a single retrieval-and-answer pass. It can
 search the corpus, read files, blame lines, and run the repository's tests. Pass a
