@@ -46,4 +46,5 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Return the process-wide Settings, constructed once."""
-    return Settings()
+    # Required fields come from the environment, which mypy cannot see.
+    return Settings()  # type: ignore[call-arg]

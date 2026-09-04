@@ -101,6 +101,18 @@ curl -X POST localhost:8000/query -H 'content-type: application/json' -d '{"ques
 PowerShell aliases `curl` to `Invoke-WebRequest`, whose arguments differ; there, use
 `curl.exe`, `Invoke-RestMethod`, or the CLI above.
 
+## Checks
+
+```bash
+ruff check .            # lint
+ruff format --check .   # formatting
+mypy                    # types, on devagent/ only
+```
+
+CI runs all three alongside the unit suite. Types are checked on the production package
+rather than the tests, which lean on fakes and stubs that would need annotating for no
+benefit.
+
 ## Tests
 
 ```bash

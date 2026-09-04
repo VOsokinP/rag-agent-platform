@@ -7,6 +7,7 @@ inside the graph -- otherwise that promise would quietly stop being true.
 """
 
 from langchain_openai import ChatOpenAI
+from pydantic import SecretStr
 
 from devagent.config import get_settings
 
@@ -16,7 +17,7 @@ def chat_model() -> ChatOpenAI:
     settings = get_settings()
     return ChatOpenAI(
         model=settings.chat_model,
-        api_key=settings.openai_api_key,
+        api_key=SecretStr(settings.openai_api_key),
         temperature=0,
     )
 

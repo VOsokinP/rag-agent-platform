@@ -73,7 +73,7 @@ def _request(
     timeout: httpx.Timeout,
     transport: httpx.BaseTransport | None,
     json: dict[str, Any] | None = None,
-) -> tuple[Any | None, int | None]:
+) -> tuple[Any, int | None]:
     """Perform one API call, returning `(payload, status)`.
 
     Returns `(None, None)` after printing a diagnosis when the server could not

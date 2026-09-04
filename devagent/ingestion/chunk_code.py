@@ -140,7 +140,7 @@ def _split_oversized_chunk(chunk: Chunk, max_chars: int) -> list[Chunk]:
     return pieces
 
 
-def _start_line(node: ast.AST) -> int:
+def _start_line(node: ast.stmt) -> int:
     """The first line of a definition, counting its decorators.
 
     `node.lineno` points at the `def`/`class` keyword, so a decorated definition
@@ -153,13 +153,13 @@ def _start_line(node: ast.AST) -> int:
     return node.lineno
 
 
-def _end_line(node: ast.AST) -> int:
+def _end_line(node: ast.stmt) -> int:
     """The last line of a node, falling back to its start line."""
     return getattr(node, "end_lineno", None) or node.lineno
 
 
 def _chunk_from_node(
-    node: ast.AST, symbol: str, lines: list[str], file_path: str
+    node: ast.stmt, symbol: str, lines: list[str], file_path: str
 ) -> Chunk | None:
     """Build a chunk for one definition, or None if it has no source text."""
     start, end = _start_line(node), _end_line(node)

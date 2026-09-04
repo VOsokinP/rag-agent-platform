@@ -5,6 +5,7 @@ edge that ends the run when the model answers or the step budget is spent.
 """
 
 import operator
+from collections.abc import Callable
 from functools import partial
 from typing import Annotated, Any, TypedDict
 
@@ -27,7 +28,7 @@ SYSTEM = (
 
 BUDGET_SPENT = "Not run: the step budget is spent. Answer from what you have."
 
-TOOLS = {
+TOOLS: dict[str, Callable[..., str]] = {
     "search_code": toolset.search_code,
     "read_file": toolset.read_file,
     "run_tests": toolset.run_tests,
@@ -60,7 +61,7 @@ class GitBlameArgs(BaseModel):
     end: int = Field(description="Last line to blame, inclusive.")
 
 
-SCHEMAS = {
+SCHEMAS: dict[str, type[BaseModel]] = {
     "search_code": SearchCodeArgs,
     "read_file": ReadFileArgs,
     "run_tests": RunTestsArgs,
@@ -112,7 +113,8 @@ def run_agent(
 
     def call_tools(state: AgentState) -> dict:
         spent = len(state["steps"])
-        steps, messages = [], []
+        steps: list[Step] = []
+        messages: list[Any] = []
         for call in state["messages"][-1].tool_calls:
             # A batch that crosses the budget is declined from here on, not
             # abandoned. The graph goes back to the model either way, and the
