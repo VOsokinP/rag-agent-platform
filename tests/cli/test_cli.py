@@ -6,7 +6,6 @@ or any network access.
 """
 
 import httpx
-import pytest
 
 from devagent import cli
 
@@ -84,7 +83,9 @@ def test_query_sends_question_k_and_repo():
 def test_query_omits_repo_when_not_given():
     """A repo filter changes retrieval; the CLI must not invent one."""
     captured = []
-    cli.main(["query", "q"], transport=transport_returning(ANSWER_PAYLOAD, capture=captured))
+    cli.main(
+        ["query", "q"], transport=transport_returning(ANSWER_PAYLOAD, capture=captured)
+    )
     body = captured[0].read().decode().replace(" ", "")
     assert '"repo":null' in body or '"repo"' not in body
 
@@ -167,14 +168,18 @@ def test_url_flag_overrides_the_default_host():
 def test_url_falls_back_to_the_environment(monkeypatch):
     monkeypatch.setenv("DEVAGENT_URL", "http://from-env:9100")
     captured = []
-    cli.main(["health"], transport=transport_returning({"status": "ok"}, capture=captured))
+    cli.main(
+        ["health"], transport=transport_returning({"status": "ok"}, capture=captured)
+    )
     assert str(captured[0].url) == "http://from-env:9100/health"
 
 
 def test_url_defaults_to_localhost(monkeypatch):
     monkeypatch.delenv("DEVAGENT_URL", raising=False)
     captured = []
-    cli.main(["health"], transport=transport_returning({"status": "ok"}, capture=captured))
+    cli.main(
+        ["health"], transport=transport_returning({"status": "ok"}, capture=captured)
+    )
     assert str(captured[0].url) == "http://localhost:8000/health"
 
 
@@ -182,20 +187,25 @@ def test_ingest_has_no_read_timeout():
     """Ingest embeds the whole corpus and runs for minutes. httpx's 5s default
     would abort the client while the server keeps working."""
     captured = []
-    cli.main(["ingest"], transport=transport_returning(INGEST_PAYLOAD, capture=captured))
+    cli.main(
+        ["ingest"], transport=transport_returning(INGEST_PAYLOAD, capture=captured)
+    )
     assert captured[0].extensions["timeout"]["read"] is None
 
 
 def test_query_keeps_a_read_timeout():
     captured = []
-    cli.main(["query", "q"], transport=transport_returning(ANSWER_PAYLOAD, capture=captured))
+    cli.main(
+        ["query", "q"], transport=transport_returning(ANSWER_PAYLOAD, capture=captured)
+    )
     assert captured[0].extensions["timeout"]["read"] is not None
 
 
 def test_blank_question_is_rejected_before_any_request():
     captured = []
     code = cli.main(
-        ["query", "   "], transport=transport_returning(ANSWER_PAYLOAD, capture=captured)
+        ["query", "   "],
+        transport=transport_returning(ANSWER_PAYLOAD, capture=captured),
     )
     assert code != 0
     assert captured == []
@@ -248,7 +258,11 @@ def test_truncation_marker_is_ascii(capsys):
 AGENT_PAYLOAD = {
     "answer": "Yes - 3 tests fail.",
     "steps": [
-        {"tool": "run_tests", "input": "tests/test_params_repr.py", "result": "3 failed"}
+        {
+            "tool": "run_tests",
+            "input": "tests/test_params_repr.py",
+            "result": "3 failed",
+        }
     ],
     "citations": [],
     "usage": {
@@ -304,5 +318,7 @@ def test_ask_warns_when_the_budget_was_exhausted(capsys):
 def test_ask_has_no_read_timeout():
     """An agent run includes container test runs and several model calls."""
     captured = []
-    cli.main(["ask", "q"], transport=transport_returning(AGENT_PAYLOAD, capture=captured))
+    cli.main(
+        ["ask", "q"], transport=transport_returning(AGENT_PAYLOAD, capture=captured)
+    )
     assert captured[0].extensions["timeout"]["read"] is None

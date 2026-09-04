@@ -117,9 +117,7 @@ def test_a_file_spanning_batches_is_cleared_only_once(tmp_path):
     session = RecordingSession()
     ingest("r", tmp_path, FakeProvider(dimensions=8), session, batch_size=2)
 
-    cleared_counts = [
-        str(s) for s in session.statements if str(s).startswith("DELETE")
-    ]
+    cleared_counts = [str(s) for s in session.statements if str(s).startswith("DELETE")]
     assert len(cleared_counts) <= 2, (
         f"expected at most one clearing delete plus the empty-file delete, got "
         f"{len(cleared_counts)}"
@@ -142,9 +140,7 @@ def test_ingest_embeds_every_chunk(mini_repo):
 
 def test_ingest_respects_batch_size(mini_repo):
     provider = FakeProvider(dimensions=8)
-    ingest(
-        "fastapi/fastapi", mini_repo, provider, RecordingSession(), batch_size=1
-    )
+    ingest("fastapi/fastapi", mini_repo, provider, RecordingSession(), batch_size=1)
     assert all(len(call) == 1 for call in provider.embed_calls)
 
 
@@ -246,9 +242,27 @@ def test_upsert_deduplicates_colliding_conflict_keys():
     from devagent.ingestion.pipeline import _dedupe_by_conflict_key
 
     rows = [
-        {"repo": "r", "file_path": "a.md", "start_line": 1, "end_line": 2, "text": "first"},
-        {"repo": "r", "file_path": "a.md", "start_line": 1, "end_line": 2, "text": "second"},
-        {"repo": "r", "file_path": "a.md", "start_line": 3, "end_line": 4, "text": "third"},
+        {
+            "repo": "r",
+            "file_path": "a.md",
+            "start_line": 1,
+            "end_line": 2,
+            "text": "first",
+        },
+        {
+            "repo": "r",
+            "file_path": "a.md",
+            "start_line": 1,
+            "end_line": 2,
+            "text": "second",
+        },
+        {
+            "repo": "r",
+            "file_path": "a.md",
+            "start_line": 3,
+            "end_line": 4,
+            "text": "third",
+        },
     ]
     deduped = _dedupe_by_conflict_key(rows)
     assert len(deduped) == 2

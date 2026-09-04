@@ -55,7 +55,9 @@ def empty_schema_session():
 
 def _store_chunks(session, provider, count):
     texts = [f"chunk number {i}" for i in range(count)]
-    for index, (chunk_text, vector) in enumerate(zip(texts, provider.embed(texts))):
+    for index, (chunk_text, vector) in enumerate(
+        zip(texts, provider.embed(texts), strict=True)
+    ):
         session.add(
             Chunk(
                 repo=REPO,

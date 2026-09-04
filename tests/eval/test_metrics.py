@@ -30,8 +30,8 @@ def test_first_hit_rank_of_an_empty_result_is_none():
 
 def test_recall_at_k_counts_questions_whose_rank_is_within_k():
     ranks = [1, 3, None, 6]
-    assert recall_at_k(ranks, 1) == 0.25   # only rank 1        -> 1/4
-    assert recall_at_k(ranks, 5) == 0.5    # ranks 1 and 3      -> 2/4
+    assert recall_at_k(ranks, 1) == 0.25  # only rank 1        -> 1/4
+    assert recall_at_k(ranks, 5) == 0.5  # ranks 1 and 3      -> 2/4
     assert recall_at_k(ranks, 10) == 0.75  # ranks 1, 3 and 6   -> 3/4
 
 

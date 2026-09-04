@@ -34,7 +34,10 @@ TARGET = "tests/test_params_repr.py"
 
 def test_the_agent_runs_the_tests_and_reports_the_real_failure():
     settings = get_settings()
-    with workspace(settings.repo_dir, BREAKING_PATCH) as root, session_scope() as session:
+    with (
+        workspace(settings.repo_dir, BREAKING_PATCH) as root,
+        session_scope() as session,
+    ):
         context = ToolContext(
             workspace_root=root,
             source_repo=settings.repo_dir,

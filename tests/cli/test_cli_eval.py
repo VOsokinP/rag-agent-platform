@@ -21,8 +21,11 @@ def build_report():
         for kind in ("identifier", "conceptual")
     }
     return Report(
-        embedding_model="text-embedding-3-small", k=10,
-        overall=score(results), by_kind=by_kind, results=tuple(results),
+        embedding_model="text-embedding-3-small",
+        k=10,
+        overall=score(results),
+        by_kind=by_kind,
+        results=tuple(results),
     )
 
 
@@ -85,8 +88,11 @@ def test_corpus_empty_is_true_when_every_result_retrieved_nothing():
         for kind in ("identifier", "conceptual")
     }
     report = Report(
-        embedding_model="m", k=10, overall=score(results),
-        by_kind=by_kind, results=results,
+        embedding_model="m",
+        k=10,
+        overall=score(results),
+        by_kind=by_kind,
+        results=results,
     )
     assert _corpus_empty(report)
 
@@ -98,7 +104,9 @@ def test_corpus_empty_is_false_when_anything_was_retrieved():
 def test_corpus_empty_is_false_with_no_questions_at_all():
     """n=0 is a different, already-handled state -- an empty golden set, not
     an empty corpus. Nothing here should call that a retrieval failure."""
-    report = Report(embedding_model="m", k=10, overall=score([]), by_kind={}, results=())
+    report = Report(
+        embedding_model="m", k=10, overall=score([]), by_kind={}, results=()
+    )
     assert not _corpus_empty(report)
 
 

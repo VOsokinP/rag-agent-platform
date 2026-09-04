@@ -1,8 +1,8 @@
 from pathlib import Path
 
-import devagent.llm.provider
 import pytest
 
+import devagent.llm.provider
 from tests.fakes import FakeProvider
 
 

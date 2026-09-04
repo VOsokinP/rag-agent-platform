@@ -52,7 +52,9 @@ def load_golden(path: Path) -> list[GoldenQuestion]:
         raise GoldenSetError(f"{path} is not valid YAML: {exc}") from exc
 
     if not isinstance(raw, list):
-        raise GoldenSetError(f"{path} must hold a list of entries, not {type(raw).__name__}")
+        raise GoldenSetError(
+            f"{path} must hold a list of entries, not {type(raw).__name__}"
+        )
 
     questions = [_entry(index, entry, path) for index, entry in enumerate(raw, start=1)]
 
@@ -71,7 +73,9 @@ def _paths(entry: Any, key: str, where: str, required: bool) -> tuple[str, ...]:
     """Validate one list-of-repo-relative-paths key."""
     values = entry.get(key) or []
     if not isinstance(values, list):
-        raise GoldenSetError(f"{where} has a non-list {key}; it must be a list of paths")
+        raise GoldenSetError(
+            f"{where} has a non-list {key}; it must be a list of paths"
+        )
     if required and not values:
         raise GoldenSetError(f"{where} has no {key}; it could only ever score zero")
     for value in values:
@@ -107,7 +111,9 @@ def _entry(index: int, entry: Any, path: Path) -> GoldenQuestion:
 
     kind = entry.get("kind")
     if kind not in KINDS:
-        raise GoldenSetError(f"{where} has kind {kind!r}; expected one of {list(KINDS)}")
+        raise GoldenSetError(
+            f"{where} has kind {kind!r}; expected one of {list(KINDS)}"
+        )
 
     files = _paths(entry, "expect_files", where, required=True)
     docs = _paths(entry, "expect_docs", where, required=False)

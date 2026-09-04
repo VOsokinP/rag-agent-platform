@@ -27,6 +27,8 @@ devagent = "devagent.cli:main"
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
+    "ruff>=0.16",
+    "mypy>=1.13",
 ]
 
 [build-system]
@@ -48,3 +50,27 @@ filterwarnings = [
     # heuristic mistakes for test classes.
     "ignore:cannot collect test class 'Test(Result|Runner)':pytest.PytestCollectionWarning",
 ]
+
+[tool.ruff]
+line-length = 88
+# Deliberately unparseable and deliberately unused imports: they are ingestion
+# fixtures, not code.
+extend-exclude = ["tests/fixtures"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# `ruff format` already holds code to the line length. What is left over is
+# prose and long string literals, which it cannot split and which read worse
+# broken up.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# `Depends(...)` in a default argument is how FastAPI declares a dependency.
+"devagent/api/main.py" = ["B008"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["devagent"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true

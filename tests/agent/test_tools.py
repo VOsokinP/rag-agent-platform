@@ -6,9 +6,15 @@ from dataclasses import replace
 import pytest
 
 from devagent.agent import tools as toolset
-from devagent.agent.tools import ToolContext, git_blame, read_file, run_tests, search_code
-from devagent.sandbox.runner import TestResult
+from devagent.agent.tools import (
+    ToolContext,
+    git_blame,
+    read_file,
+    run_tests,
+    search_code,
+)
 from devagent.retrieval.vector_search import RetrievedChunk
+from devagent.sandbox.runner import TestResult
 from tests.fakes import FakeProvider
 
 
@@ -85,9 +91,13 @@ def test_search_code_records_what_retrieval_returned(tmp_path, retrieval_returni
     assert [c.file_path for c in ctx.citations] == ["fastapi/params.py"]
 
 
-def test_a_chunk_found_twice_is_cited_once_at_its_best_score(tmp_path, retrieval_returning):
+def test_a_chunk_found_twice_is_cited_once_at_its_best_score(
+    tmp_path, retrieval_returning
+):
     """Two searches over similar ground otherwise repeat the same chunk."""
-    other = replace(CHUNK, file_path="fastapi/routing.py", symbol="APIRoute", score=0.31)
+    other = replace(
+        CHUNK, file_path="fastapi/routing.py", symbol="APIRoute", score=0.31
+    )
     retrieval_returning([CHUNK], [replace(CHUNK, score=0.61), other])
 
     ctx = make_ctx(tmp_path)
@@ -127,7 +137,9 @@ TARGET = "tests/test_params_repr.py"
 
 def test_run_tests_reports_failures_as_a_finding(tmp_path):
     ctx = make_ctx(tmp_path)
-    ctx.runner = FakeRunner(TestResult(True, 1, 39, 3, 4.0, "3 failed, 39 passed", None))
+    ctx.runner = FakeRunner(
+        TestResult(True, 1, 39, 3, 4.0, "3 failed, 39 passed", None)
+    )
     out = run_tests(ctx, TARGET)
     assert "3 failed" in out
     assert "39 passed" in out

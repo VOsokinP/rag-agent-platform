@@ -56,7 +56,9 @@ class QueryResponse(BaseModel):
 
 class AgentRequest(BaseModel):
     question: str = Field(min_length=1)
-    patch: str | None = Field(default=None, description="Unified diff to apply before running.")
+    patch: str | None = Field(
+        default=None, description="Unified diff to apply before running."
+    )
     k: int = Field(default=8, ge=1, le=100)
 
     @field_validator("question")

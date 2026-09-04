@@ -40,9 +40,7 @@ DEFAULT_URL = "http://localhost:8000"
 INGEST_TIMEOUT = httpx.Timeout(connect=10.0, read=None, write=30.0, pool=10.0)
 QUERY_TIMEOUT = httpx.Timeout(connect=10.0, read=120.0, write=30.0, pool=10.0)
 
-START_SERVER_HINT = (
-    "Start it with:\n    uvicorn devagent.api.main:app --reload"
-)
+START_SERVER_HINT = "Start it with:\n    uvicorn devagent.api.main:app --reload"
 
 
 SYMBOL_WIDTH = 60
@@ -115,7 +113,9 @@ def _health(args, transport) -> int:
 
 def _ingest(args, transport) -> int:
     body = {"repo": args.repo}
-    print(f"Ingesting via {args.url} -- this embeds the whole repository and takes a while.")
+    print(
+        f"Ingesting via {args.url} -- this embeds the whole repository and takes a while."
+    )
     payload, status = _request(
         args.url, "POST", "/ingest", INGEST_TIMEOUT, transport, json=body
     )
@@ -198,7 +198,9 @@ def _ask(args, transport) -> int:
 
     # Agent runs make several model calls and at least one container test run,
     # so they get the ingest timeout rather than the query one.
-    payload, status = _request(args.url, "POST", "/agent", INGEST_TIMEOUT, transport, json=body)
+    payload, status = _request(
+        args.url, "POST", "/agent", INGEST_TIMEOUT, transport, json=body
+    )
     if status is None:
         return 1
     if status != 200:
@@ -210,7 +212,9 @@ def _ask(args, transport) -> int:
     if steps:
         print("\nSteps:")
         for number, step in enumerate(steps, start=1):
-            print(f"  {number}. {step['tool']}({step['input']}) -> {_shorten(step['result'])}")
+            print(
+                f"  {number}. {step['tool']}({step['input']}) -> {_shorten(step['result'])}"
+            )
 
     usage = payload.get("usage") or {}
     if usage:
@@ -220,7 +224,9 @@ def _ask(args, transport) -> int:
             f"~${usage['cost_usd']:.3f} (estimated)"
         )
     if payload.get("budget_exhausted"):
-        print("\nWarning: the step budget was exhausted; this answer may be incomplete.")
+        print(
+            "\nWarning: the step budget was exhausted; this answer may be incomplete."
+        )
     return 0
 
 
@@ -243,9 +249,7 @@ def format_report(report: Report, kind: str | None = None) -> str:
     ]
     for name, scores in rows:
         recalls = "  ".join(f"{scores.recall[k]:<7.2f}" for k in KS)
-        lines.append(
-            f"{name:<12}  n={scores.n:<3}  {recalls}  {scores.mrr:>6.3f}"
-        )
+        lines.append(f"{name:<12}  n={scores.n:<3}  {recalls}  {scores.mrr:>6.3f}")
 
     # Which half of the corpus answered. Hybrid search moves hits from docs to
     # code, and an aggregate recall number hides that completely -- this line is
@@ -279,7 +283,9 @@ def _corpus_commit(repo_dir: Path) -> str | None:
     try:
         completed = subprocess.run(
             ["git", "-C", str(repo_dir), "rev-parse", "HEAD"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -354,44 +360,68 @@ def build_parser() -> argparse.ArgumentParser:
     health = subparsers.add_parser("health", help="Check that the server is reachable.")
     health.set_defaults(handler=_health)
 
-    ingest = subparsers.add_parser("ingest", help="Clone, chunk, embed and store the repo.")
+    ingest = subparsers.add_parser(
+        "ingest", help="Clone, chunk, embed and store the repo."
+    )
     ingest.add_argument("--repo", default=None, help="Label recorded on each row.")
     ingest.set_defaults(handler=_ingest)
 
-    query = subparsers.add_parser("query", help="Ask a question about the ingested repo.")
+    query = subparsers.add_parser(
+        "query", help="Ask a question about the ingested repo."
+    )
     query.add_argument("question")
-    query.add_argument("-k", type=int, default=8, help="Chunks to retrieve (default: 8).")
-    query.add_argument("--repo", default=None, help="Restrict retrieval to one repo label.")
+    query.add_argument(
+        "-k", type=int, default=8, help="Chunks to retrieve (default: 8)."
+    )
+    query.add_argument(
+        "--repo", default=None, help="Restrict retrieval to one repo label."
+    )
     query.set_defaults(handler=_query)
 
     ask = subparsers.add_parser("ask", help="Ask the agent, which can run tests.")
     ask.add_argument("question")
-    ask.add_argument("--patch", default=None, help="Path to a unified diff to apply first.")
+    ask.add_argument(
+        "--patch", default=None, help="Path to a unified diff to apply first."
+    )
     ask.add_argument("-k", type=int, default=8, help="Chunks to retrieve (default: 8).")
     ask.set_defaults(handler=_ask)
 
     evaluate = subparsers.add_parser(
         "eval", help="Score retrieval against the labelled golden set."
     )
-    evaluate.add_argument("-k", type=int, default=RETRIEVAL_K,
-                          help=f"Chunks to retrieve (default: {RETRIEVAL_K}).")
-    evaluate.add_argument("--kind", default=None, choices=list(KINDS),
-                          help="Report only one population.")
-    evaluate.add_argument("--repo", default=None,
-                          help="Restrict retrieval to one ingested repo; omit to "
-                          "search every repo.")
-    evaluate.add_argument("--golden", default="evals/golden.yaml",
-                          help="Path to the labelled set.")
-    evaluate.add_argument("--baseline", default="evals/baseline.json",
-                          help="Path to the recorded floor.")
-    evaluate.add_argument("--record", action="store_true",
-                          help="Overwrite the baseline with this run's numbers.")
+    evaluate.add_argument(
+        "-k",
+        type=int,
+        default=RETRIEVAL_K,
+        help=f"Chunks to retrieve (default: {RETRIEVAL_K}).",
+    )
+    evaluate.add_argument(
+        "--kind", default=None, choices=list(KINDS), help="Report only one population."
+    )
+    evaluate.add_argument(
+        "--repo",
+        default=None,
+        help="Restrict retrieval to one ingested repo; omit to search every repo.",
+    )
+    evaluate.add_argument(
+        "--golden", default="evals/golden.yaml", help="Path to the labelled set."
+    )
+    evaluate.add_argument(
+        "--baseline", default="evals/baseline.json", help="Path to the recorded floor."
+    )
+    evaluate.add_argument(
+        "--record",
+        action="store_true",
+        help="Overwrite the baseline with this run's numbers.",
+    )
     evaluate.set_defaults(handler=_eval)
 
     return parser
 
 
-def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None = None) -> int:
+def main(
+    argv: list[str] | None = None, *, transport: httpx.BaseTransport | None = None
+) -> int:
     """Run one CLI invocation and return its exit code.
 
     `transport` is injectable so tests can drive the real request-building and

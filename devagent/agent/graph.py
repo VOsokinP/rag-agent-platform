@@ -120,7 +120,9 @@ def run_agent(
             # answered -- so dropping the rest would 500 the request rather
             # than stop it. Declining still spends nothing: the tool never runs.
             if spent + len(steps) >= budget:
-                messages.append(ToolMessage(content=BUDGET_SPENT, tool_call_id=call["id"]))
+                messages.append(
+                    ToolMessage(content=BUDGET_SPENT, tool_call_id=call["id"])
+                )
                 continue
             result = _invoke_tool(ctx, call)
             steps.append(Step(call["name"], _describe(call["args"]), result))

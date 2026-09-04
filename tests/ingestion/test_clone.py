@@ -101,7 +101,9 @@ def test_ensure_repo_accepts_a_directory_with_a_git_dir(tmp_path):
 def test_duplicate_physical_files_are_yielded_once(fake_repo, monkeypatch):
     """A path reachable twice must not be ingested twice."""
     real = fake_repo / "fastapi" / "routing.py"
-    seen_paths = [absolute for absolute, _ in iter_source_files(fake_repo, FASTAPI_GLOBS)]
+    seen_paths = [
+        absolute for absolute, _ in iter_source_files(fake_repo, FASTAPI_GLOBS)
+    ]
     assert seen_paths.count(real.resolve()) == 1
 
 
@@ -142,12 +144,16 @@ def _checkout_with_origin(directory: Path, origin: str) -> Path:
 
 def test_ensure_repo_rejects_a_checkout_of_a_different_repo(tmp_path):
     """Reuse must not silently ingest one repository under another's URL."""
-    checkout = _checkout_with_origin(tmp_path / "repo", "https://github.com/fastapi/fastapi")
+    checkout = _checkout_with_origin(
+        tmp_path / "repo", "https://github.com/fastapi/fastapi"
+    )
     with pytest.raises(RuntimeError, match="fastapi"):
         ensure_repo("https://github.com/pallets/flask", checkout)
 
 
 def test_ensure_repo_reuses_a_checkout_of_the_same_repo(tmp_path):
     """The ssh and https spellings of one remote are the same repository."""
-    checkout = _checkout_with_origin(tmp_path / "repo", "git@github.com:fastapi/fastapi.git")
+    checkout = _checkout_with_origin(
+        tmp_path / "repo", "git@github.com:fastapi/fastapi.git"
+    )
     assert ensure_repo("https://github.com/fastapi/fastapi", checkout) == checkout

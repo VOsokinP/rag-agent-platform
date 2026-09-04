@@ -87,9 +87,7 @@ def ingest_endpoint(
         # single-operator local tool, but if DevAgent ever grew auth or accepted
         # arbitrary URLs with embedded credentials, this would need redaction.
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    result = ingest(
-        repo_name, repo_dir, provider, session, settings.include_globs
-    )
+    result = ingest(repo_name, repo_dir, provider, session, settings.include_globs)
 
     # Commit inside the request path, not in the dependency's exit code. An
     # exception raised while unwinding a `yield` dependency cannot change a
@@ -119,9 +117,7 @@ def query_endpoint(
     session: Any = Depends(get_session_dep),
 ) -> QueryResponse:
     """Answer a question about the ingested repository, with citations."""
-    chunks = search(
-        request.question, provider, session, repo=request.repo, k=request.k
-    )
+    chunks = search(request.question, provider, session, repo=request.repo, k=request.k)
     try:
         result = answer_question(request.question, chunks, provider)
     except EmptyCorpusError as exc:

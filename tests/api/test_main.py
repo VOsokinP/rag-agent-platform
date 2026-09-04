@@ -1,7 +1,12 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from devagent.api.main import app, _repo_name_from_url, get_provider_dep, get_session_dep
+from devagent.api.main import (
+    _repo_name_from_url,
+    app,
+    get_provider_dep,
+    get_session_dep,
+)
 from devagent.db.models import Chunk as ChunkRow
 from tests.fakes import FakeProvider
 
@@ -152,7 +157,7 @@ def _mini_repo(tmp_path):
     package = tmp_path / "fastapi"
     package.mkdir()
     (package / "x.py").write_text(
-        "def hello(name):\n" '    """Greet."""\n' "    return name\n",
+        'def hello(name):\n    """Greet."""\n    return name\n',
         encoding="utf-8",
     )
     return tmp_path

@@ -22,7 +22,8 @@ def source_repo(tmp_path):
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
     subprocess.run(
         ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init"],
-        cwd=repo, check=True,
+        cwd=repo,
+        check=True,
     )
     return repo
 

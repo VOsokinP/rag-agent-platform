@@ -19,16 +19,22 @@ def report_with(ranks_by_kind, embedding_model="text-embedding-3-small"):
         for index, rank in enumerate(ranks):
             results.append(
                 QuestionResult(
-                    question=f"{kind}-{index}", kind=kind, rank=rank,
-                    retrieved_files=("a.py",), hit_source=None,
+                    question=f"{kind}-{index}",
+                    kind=kind,
+                    rank=rank,
+                    retrieved_files=("a.py",),
+                    hit_source=None,
                 )
             )
     by_kind = {
         kind: score([r for r in results if r.kind == kind]) for kind in ranks_by_kind
     }
     return Report(
-        embedding_model=embedding_model, k=10, overall=score(results),
-        by_kind=by_kind, results=tuple(results),
+        embedding_model=embedding_model,
+        k=10,
+        overall=score(results),
+        by_kind=by_kind,
+        results=tuple(results),
     )
 
 
@@ -51,7 +57,9 @@ def test_the_baseline_records_the_embedding_model():
 def test_the_baseline_round_trips_through_json(tmp_path):
     report = report_with({"identifier": [1, 3], "conceptual": [None]})
     path = tmp_path / "baseline.json"
-    path.write_text(json.dumps(to_baseline(report, recorded="2026-09-03")), encoding="utf-8")
+    path.write_text(
+        json.dumps(to_baseline(report, recorded="2026-09-03")), encoding="utf-8"
+    )
 
     assert load_baseline(path)["overall"]["recall"]["5"] == pytest.approx(2 / 3)
 
@@ -62,14 +70,18 @@ def test_an_identical_report_passes_the_gate():
 
 
 def test_a_drop_within_tolerance_passes():
-    baseline = to_baseline(report_with({"identifier": [1] * 100}), recorded="2026-09-03")
+    baseline = to_baseline(
+        report_with({"identifier": [1] * 100}), recorded="2026-09-03"
+    )
     # 99 of 100 within k=5: recall@5 = 0.99, a 0.01 drop, inside TOLERANCE.
     worse = report_with({"identifier": [1] * 99 + [None]})
     assert check(worse, baseline) == []
 
 
 def test_a_drop_beyond_tolerance_fails_and_says_by_how_much():
-    baseline = to_baseline(report_with({"identifier": [1] * 100}), recorded="2026-09-03")
+    baseline = to_baseline(
+        report_with({"identifier": [1] * 100}), recorded="2026-09-03"
+    )
     # 90 of 100: recall@5 = 0.90, a 0.10 drop, well beyond TOLERANCE.
     worse = report_with({"identifier": [1] * 90 + [None] * 10})
 
@@ -129,7 +141,9 @@ def test_a_differing_k_fails_and_names_both_depths():
 def test_a_k_change_is_reported_separately_from_a_recall_drop():
     """A red gate has to say which of the two kinds of red it is, the same
     way it already does for a moved embedding model."""
-    baseline = to_baseline(report_with({"identifier": [1] * 100}), recorded="2026-09-03")
+    baseline = to_baseline(
+        report_with({"identifier": [1] * 100}), recorded="2026-09-03"
+    )
     worse_and_deeper = report_with({"identifier": [1] * 90 + [None] * 10})
     object.__setattr__(worse_and_deeper, "k", 20)
 

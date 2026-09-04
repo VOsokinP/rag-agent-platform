@@ -90,6 +90,7 @@ def _free_range(
                 return (candidate_start, candidate_end)
     return None
 
+
 def _sections(source: str) -> list[tuple[str | None, int, int, str]]:
     """Yield (heading path, start line, last line, text) for each section.
 
@@ -171,7 +172,8 @@ def _split_paragraph(paragraph: str, max_chars: int) -> list[str]:
         if len(line) > max_chars:
             flush_buffer()
             pieces.extend(
-                line[start : start + max_chars] for start in range(0, len(line), max_chars)
+                line[start : start + max_chars]
+                for start in range(0, len(line), max_chars)
             )
             continue
         if buffer and length + len(line) + 1 > max_chars:

@@ -52,7 +52,9 @@ def test_unique_constraint_excludes_nullable_symbol():
 
 def test_embedding_index_uses_cosine_distance():
     index = next(i for i in Chunk.__table__.indexes if i.name == "ix_chunks_embedding")
-    assert index.dialect_options["postgresql"]["ops"] == {"embedding": "vector_cosine_ops"}
+    assert index.dialect_options["postgresql"]["ops"] == {
+        "embedding": "vector_cosine_ops"
+    }
 
 
 def test_embedding_index_is_hnsw_not_ivfflat():

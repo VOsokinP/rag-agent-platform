@@ -11,15 +11,23 @@ from devagent.retrieval.vector_search import RetrievedChunk
 
 def chunk(file_path, score_value=0.5):
     return RetrievedChunk(
-        file_path=file_path, symbol=None, kind="code",
-        start_line=1, end_line=2, text="body", score=score_value,
+        file_path=file_path,
+        symbol=None,
+        kind="code",
+        start_line=1,
+        end_line=2,
+        text="body",
+        score=score_value,
     )
 
 
 def question(text, files, kind="identifier", docs=()):
     return GoldenQuestion(
-        question=text, expect_files=tuple(files), expect_symbols=(),
-        expect_docs=tuple(docs), kind=kind,
+        question=text,
+        expect_files=tuple(files),
+        expect_symbols=(),
+        expect_docs=tuple(docs),
+        kind=kind,
     )
 
 
@@ -53,10 +61,12 @@ def test_recall_and_mrr_come_from_one_ranked_list():
     """Ranks 1 and 3 over two questions: recall@1 = 0.5, recall@5 = 1.0,
     MRR = (1/1 + 1/3) / 2 = 0.666..."""
     questions = [question("q1", ["a.py"]), question("q2", ["b.py"])]
-    retrieve = retriever_returning({
-        "q1": ["a.py", "z.py"],
-        "q2": ["z.py", "y.py", "b.py"],
-    })
+    retrieve = retriever_returning(
+        {
+            "q1": ["a.py", "z.py"],
+            "q2": ["z.py", "y.py", "b.py"],
+        }
+    )
 
     report = run_eval(questions, retrieve, embedding_model="m")
 
@@ -95,7 +105,9 @@ def test_a_kind_with_no_questions_still_appears_with_n_zero():
 def test_the_report_records_the_embedding_model_and_k():
     """The model is recorded so a red gate can distinguish a retrieval
     regression from an embedding-model snapshot moving underneath it."""
-    report = run_eval([], retriever_returning({}), embedding_model="text-embedding-3-small")
+    report = run_eval(
+        [], retriever_returning({}), embedding_model="text-embedding-3-small"
+    )
 
     assert isinstance(report, Report)
     assert report.embedding_model == "text-embedding-3-small"
@@ -152,9 +164,13 @@ def test_the_report_records_which_side_the_hit_came_from():
         question("q2", ["b.py"], kind="conceptual", docs=["docs/e.md"]),
         question("q3", ["c.py"], kind="conceptual", docs=["docs/f.md"]),
     ]
-    retrieve = retriever_returning({
-        "q1": ["docs/d.md"], "q2": ["b.py"], "q3": ["zzz.py"],
-    })
+    retrieve = retriever_returning(
+        {
+            "q1": ["docs/d.md"],
+            "q2": ["b.py"],
+            "q3": ["zzz.py"],
+        }
+    )
 
     report = run_eval(questions, retrieve, embedding_model="m")
 

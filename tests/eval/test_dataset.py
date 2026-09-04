@@ -29,7 +29,10 @@ def test_loads_entries_in_file_order(tmp_path):
         "what does Depends do?",
         "APIRoute.get_route_handler",
     ]
-    assert questions[0].expect_files == ("fastapi/params.py", "fastapi/param_functions.py")
+    assert questions[0].expect_files == (
+        "fastapi/params.py",
+        "fastapi/param_functions.py",
+    )
     assert questions[0].kind == "conceptual"
 
 
@@ -59,7 +62,10 @@ def test_rejects_an_entry_with_no_expected_files(tmp_path):
 
 
 def test_rejects_a_duplicate_question(tmp_path):
-    text = VALID + "\n- question: what does Depends do?\n  expect_files: [a.py]\n  kind: identifier\n"
+    text = (
+        VALID
+        + "\n- question: what does Depends do?\n  expect_files: [a.py]\n  kind: identifier\n"
+    )
     with pytest.raises(GoldenSetError, match="duplicate"):
         load_golden(write(tmp_path, text))
 

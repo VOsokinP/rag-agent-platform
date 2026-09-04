@@ -39,9 +39,13 @@ def _overrides():
 
 RESULT = AgentResult(
     answer="Yes - 3 tests fail.",
-    steps=[Step("run_tests", "target=tests/test_params_repr.py", "3 failed, 39 passed")],
+    steps=[
+        Step("run_tests", "target=tests/test_params_repr.py", "3 failed, 39 passed")
+    ],
     citations=[],
-    usage=Usage(llm_calls=4, prompt_tokens=18000, completion_tokens=340, cost_usd=0.012),
+    usage=Usage(
+        llm_calls=4, prompt_tokens=18000, completion_tokens=340, cost_usd=0.012
+    ),
 )
 
 
@@ -49,7 +53,9 @@ def test_agent_returns_answer_steps_and_usage(monkeypatch, fake_workspace):
     monkeypatch.setattr("devagent.api.main.run_agent", lambda *a, **k: RESULT)
     monkeypatch.setattr("devagent.api.main.chat_model", lambda: object())
 
-    response = TestClient(app).post("/agent", json={"question": "would this break tests?"})
+    response = TestClient(app).post(
+        "/agent", json={"question": "would this break tests?"}
+    )
     body = response.json()
     assert response.status_code == 200
     assert body["answer"] == "Yes - 3 tests fail."

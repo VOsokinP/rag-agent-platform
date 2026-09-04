@@ -141,9 +141,7 @@ def test_split_line_numbers_match_the_source():
 
 
 def test_oversized_class_becomes_a_header_chunk_not_a_split_body():
-    body = "\n".join(
-        f"    def m{i}(self):\n        return {i}" for i in range(400)
-    )
+    body = "\n".join(f"    def m{i}(self):\n        return {i}" for i in range(400))
     source = f'class Huge:\n    """Docs."""\n{body}\n'
     chunks = chunk_python_source(source, "pkg/huge.py", max_chars=2000)
     class_chunk = next(c for c in chunks if c.symbol == "Huge")

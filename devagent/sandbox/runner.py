@@ -90,7 +90,9 @@ class DockerRunner:
         """
         candidate = Path(target)
         if candidate.is_absolute() or ".." in candidate.parts:
-            raise ValueError(f"test target must be a relative path inside tests/: {target}")
+            raise ValueError(
+                f"test target must be a relative path inside tests/: {target}"
+            )
         if candidate.parts[:1] != ("tests",):
             raise ValueError(f"test target must live under tests/: {target}")
         # The tutorial tests write into the work tree, which is mounted
@@ -102,26 +104,40 @@ class DockerRunner:
             )
 
         return [
-            "docker", "run", "--rm",
+            "docker",
+            "run",
+            "--rm",
             "--network=none",
             "--memory=2g",
             "--cpus=2",
             "--pids-limit=512",
-            "--user", "1000:1000",
-            "-v", f"{workspace_root}:/work:ro",
-            "--tmpfs", "/tmp",
-            "-w", "/work",
+            "--user",
+            "1000:1000",
+            "-v",
+            f"{workspace_root}:/work:ro",
+            "--tmpfs",
+            "/tmp",
+            "-w",
+            "/work",
             # PYTHONPATH puts the patched copy ahead of the package installed
             # in the image. Without it pytest imports site-packages and every
             # run reports on unpatched code -- passing, always, wrongly.
-            "-e", "PYTHONPATH=/work",
+            "-e",
+            "PYTHONPATH=/work",
             # /work is mounted read-only and the run user owns no home, so
             # bytecode writes and anything resolving ~ would fail for reasons
             # that have nothing to do with the tests.
-            "-e", "PYTHONDONTWRITEBYTECODE=1",
-            "-e", "HOME=/tmp",
+            "-e",
+            "PYTHONDONTWRITEBYTECODE=1",
+            "-e",
+            "HOME=/tmp",
             self.image,
-            "python", "-m", "pytest", "-p", "no:cacheprovider", "--tb=short",
+            "python",
+            "-m",
+            "pytest",
+            "-p",
+            "no:cacheprovider",
+            "--tb=short",
             f"/work/{candidate.as_posix()}",
         ]
 
@@ -137,7 +153,9 @@ class DockerRunner:
                 argv, capture_output=True, text=True, timeout=self.timeout
             )
         except subprocess.TimeoutExpired:
-            return TestResult.failure(f"test run exceeded {self.timeout:.0f}s and was killed")
+            return TestResult.failure(
+                f"test run exceeded {self.timeout:.0f}s and was killed"
+            )
         except FileNotFoundError:
             return TestResult.failure("docker is not installed or not on PATH")
 

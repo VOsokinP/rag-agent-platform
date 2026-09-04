@@ -117,9 +117,7 @@ def run_eval(
 
     # Every kind gets a row even when empty, so a missing population is visible
     # as n=0 rather than as an absent line nobody notices.
-    by_kind = {
-        kind: score([r for r in results if r.kind == kind]) for kind in KINDS
-    }
+    by_kind = {kind: score([r for r in results if r.kind == kind]) for kind in KINDS}
     return Report(
         embedding_model=embedding_model,
         k=k,

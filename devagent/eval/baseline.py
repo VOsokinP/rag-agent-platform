@@ -65,7 +65,9 @@ def load_baseline(path: Path) -> dict[str, Any]:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def check(report: Report, baseline: dict[str, Any], *, repo: str | None = None) -> list[str]:
+def check(
+    report: Report, baseline: dict[str, Any], *, repo: str | None = None
+) -> list[str]:
     """Return one string per gate failure. An empty list means the gate passed."""
     failures = []
 

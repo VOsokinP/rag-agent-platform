@@ -26,9 +26,7 @@ def ingested():
     init_db()
     repo_dir = ensure_repo(settings.repo_url, settings.repo_dir)
     with session_scope() as session:
-        result = ingest(
-            REPO, repo_dir, get_provider(), session, settings.include_globs
-        )
+        result = ingest(REPO, repo_dir, get_provider(), session, settings.include_globs)
     return result
 
 

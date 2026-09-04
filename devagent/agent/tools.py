@@ -129,14 +129,18 @@ def git_blame(ctx: ToolContext, path: str, start: int, end: int) -> str:
         # checkout that outlives the request, so it happens once.
         completed = subprocess.run(
             ["git", "fetch", "--unshallow"],
-            cwd=ctx.source_repo, capture_output=True, text=True,
+            cwd=ctx.source_repo,
+            capture_output=True,
+            text=True,
         )
         if completed.returncode != 0:
             return f"Could not fetch history for blame: {completed.stderr.strip()}"
 
     completed = subprocess.run(
         ["git", "blame", "-L", f"{start},{end}", "--", path],
-        cwd=ctx.source_repo, capture_output=True, text=True,
+        cwd=ctx.source_repo,
+        capture_output=True,
+        text=True,
     )
     if completed.returncode != 0:
         return f"blame failed: {completed.stderr.strip()}"
@@ -146,6 +150,8 @@ def git_blame(ctx: ToolContext, path: str, start: int, end: int) -> str:
 def _is_shallow(repo_dir: Path) -> bool:
     completed = subprocess.run(
         ["git", "rev-parse", "--is-shallow-repository"],
-        cwd=repo_dir, capture_output=True, text=True,
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
     )
     return completed.stdout.strip() == "true"

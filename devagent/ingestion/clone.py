@@ -56,7 +56,9 @@ def ensure_repo(repo_url: str, repo_dir: Path) -> Path:
 
     if (repo_dir / ".git").exists():
         origin = _origin_url(repo_dir)
-        if origin is not None and _remote_identity(origin) != _remote_identity(repo_url):
+        if origin is not None and _remote_identity(origin) != _remote_identity(
+            repo_url
+        ):
             raise RuntimeError(
                 f"{repo_dir} is a checkout of {origin}, not {repo_url}. "
                 "Point REPO_DIR at a different directory, or remove it."
@@ -118,9 +120,7 @@ def iter_source_files(
 
             resolved = path.resolve()
             if not resolved.is_relative_to(repo_root):
-                logger.warning(
-                    "Skipping %s: resolves outside the repository", path
-                )
+                logger.warning("Skipping %s: resolves outside the repository", path)
                 continue
             if resolved in seen:
                 continue
