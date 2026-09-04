@@ -1,7 +1,9 @@
 {
-  "recorded": "2026-09-03",
+  "recorded": "2026-09-04",
   "embedding_model": "text-embedding-3-small",
   "k": 10,
+  "repo": null,
+  "corpus_commit": "50113da16fec53b66b80d75e80a89296de4fa5a5",
   "overall": {
     "n": 60,
     "recall": {
