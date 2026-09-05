@@ -2,6 +2,7 @@
 
 from langchain_core.messages import ToolMessage
 
+from devagent.agent import graph
 from devagent.agent.graph import bound_tools, run_agent
 from devagent.agent.tools import ToolContext
 from tests.fakes import FakeProvider
@@ -153,3 +154,21 @@ def test_the_model_is_given_the_bound_tools(tmp_path):
         "run_tests",
         "git_blame",
     }
+
+
+def test_system_prompt_steers_search_away_from_keywords():
+    """Guards intent, not behaviour -- the behaviour needs a real model.
+
+    Measured: asking "can I use pydantic.v1 models with latest version of
+    FastAPI?", the model searched `pydantic.v1`, which does not retrieve the
+    page saying support was removed in 0.128.0, and it answered "yes" from a
+    stale chunk. Searching the whole question ranks that page second, and the
+    answer flips to the correct one.
+    """
+    assert "whole question" in graph.SYSTEM
+    assert "keywords" in graph.SYSTEM
+
+
+def test_system_prompt_warns_that_the_corpus_spans_versions():
+    """Release notes state things that were true once and are false now."""
+    assert "release notes" in graph.SYSTEM
