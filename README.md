@@ -16,43 +16,52 @@ Two claims, each shown as the same command run twice with exactly one thing chan
 
 ### Retrieval, against a codebase newer than the model
 
-```
-$ devagent query "Can I still use pydantic.v1 models with FastAPI?" --no-retrieval
+````
+$ devagent query "After upgrading FastAPI, my ORJSONResponse import warns that it is deprecated. What should I use instead?" --no-retrieval
 [no retrieval] answered from the model alone -- nothing grounds this.
 
-Yes, you can still use Pydantic v1 models with FastAPI. FastAPI is compatible with
-Pydantic v1 [...] if you have existing code that uses Pydantic v1, it will continue to
-work with FastAPI.
+As of FastAPI v0.95.0, `ORJSONResponse` has been deprecated in favor of using the
+`JSONResponse` as it now utilizes `orjson` internally when available.
 
-$ devagent query "Can I still use pydantic.v1 models with FastAPI?"
-You can still use `pydantic.v1` models with FastAPI only if you are using versions of
-FastAPI between 0.119.0 and 0.128.0, as this temporary support was removed in version
-0.128.0. In current versions of FastAPI, using a `pydantic.v1` model will raise an error
-(docs/en/docs/how-to/migrate-from-pydantic-v1-to-pydantic-v2.md). [...] a
-`PydanticV1NotSupportedError` will be raised when attempting to use `pydantic.v1` models
-(fastapi/exceptions.py).
+```python
+from fastapi.responses import JSONResponse
+
+@app.get("/items/")
+async def read_items():
+    return JSONResponse(content={"message": "Hello, World!"})
+```
+
+Make sure to install `orjson` if you haven't already, as it allows FastAPI to take
+advantage of optimized JSON serialization.
+
+$ devagent query "After upgrading FastAPI, my ORJSONResponse import warns that it is deprecated. What should I use instead?"
+You should use a Response Model instead of `ORJSONResponse`. FastAPI now serializes data
+directly to JSON bytes via Pydantic when a return type or response model is set. This
+approach is faster and does not require a custom response class.
 
 Sources:
-  docs/en/docs/how-to/migrate-from-pydantic-v1-to-pydantic-v2.md    57-79  +0.69  Migrate from Pydantic v1 [...]
-  docs/en/docs/release-notes.md                                 4248-4254  +0.69  Release Notes > 0.100.0 > Pydantic v1
-  docs/en/docs/features.md                                        178-201  +0.67  Features > Pydantic features
-  fastapi/exceptions.py                                           246-249  +0.65  PydanticV1NotSupportedError
+  docs/en/docs/release-notes.md            820-822  +0.65  Release Notes > 0.131.0 > Breaking Changes
+  fastapi/responses.py                       69-98  +0.63  ORJSONResponse
+  docs/en/docs/reference/responses.md        23-61  +0.62  Custom Response Classes [...]
+  docs/en/docs/advanced/custom-response.md 247-253  +0.59  Custom Response [...]
   [...]
-```
+````
 
 Both runs use the same model — `gpt-4o-mini`, the configured `CHAT_MODEL` — with the same
 settings and the same question. The only variable is whether the corpus is in front of it.
 
-The first answer is fluent, confident, and ends on a claim a reader would act on —
-existing Pydantic v1 code "will continue to work with FastAPI" — that is simply false:
-support was removed in FastAPI 0.128.0, years after the model's training data ends. The
-second gives the version window, the version it was removed in, and the error you get
-instead — and `PydanticV1NotSupportedError` really is in the checkout, at the lines the
-citation points to.
+The ungrounded answer is confident, fluent, and wrong in three separate ways. The
+deprecation landed in 0.131.0, not 0.95.0. `JSONResponse` does not use `orjson` internally
+— it is Starlette's class, and its `render` calls `json.dumps`, which you can check in the
+checkout. And the advice is backwards: the replacement is a response model, not a
+different response class. The code sample runs, which is what makes it dangerous.
 
-That is the whole argument for retrieval on a codebase that moves: the corpus here is
-FastAPI 0.141.1, and no amount of prompting gets stale weights to a symbol they have
-never seen.
+The grounded answer names the replacement and cites the file that carries the deprecation.
+Both citations are checkable: `fastapi/responses.py:69-98` is the deprecated class itself.
+
+That is the argument for retrieval on a codebase that moves. The corpus here is FastAPI
+0.141.1, released years after this model's training data ends, and no amount of prompting
+gets stale weights to a fact they never saw.
 
 `--no-retrieval` is the control rather than a feature. It runs the same client, model and
 settings with no corpus and no citations, so nothing but retrieval separates the two runs.
