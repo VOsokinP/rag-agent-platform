@@ -234,9 +234,11 @@ def _ask(args, transport) -> int:
     if steps and not args.brief:
         print("\nSteps:")
         for number, step in enumerate(steps, start=1):
-            print(
-                f"  {number}. {step['tool']}({step['input']}) -> {_headline(step['result'])}"
-            )
+            # The result on its own line, under the call that produced it. On
+            # one line the arrow reads as "and then", which turns a single tool
+            # call and its outcome into what looks like two steps.
+            print(f"  {number}. {step['tool']}({step['input']})")
+            print(f"     -> {_headline(step['result'])}")
 
     usage = payload.get("usage") or {}
     if usage:

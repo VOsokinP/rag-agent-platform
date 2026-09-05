@@ -66,7 +66,8 @@ $ devagent ask "run tests/test_params_repr.py and tell me whether it passes"
 The test suite `tests/test_params_repr.py` has passed successfully, with all 26 tests passing.
 
 Steps:
-  1. run_tests(target=tests/test_params_repr.py) -> tests/test_params_repr.py: no failures, 26 passed in 12.5s (exit 0)
+  1. run_tests(target=tests/test_params_repr.py)
+     -> tests/test_params_repr.py: no failures, 26 passed in 12.5s (exit 0)
 
 2 model calls, 915 tokens, ~$0.000 (estimated)
 
@@ -76,7 +77,8 @@ message indicates that there was an issue with importing a name from the `fastap
 module [...] Specifically, it mentions that it cannot import `ThisDoesNotExist`.
 
 Steps:
-  1. run_tests(target=tests/test_params_repr.py) -> tests/test_params_repr.py: 1 failed, 0 passed in 9.8s (exit 2)
+  1. run_tests(target=tests/test_params_repr.py)
+     -> tests/test_params_repr.py: 1 failed, 0 passed in 9.8s (exit 2)
 
 2 model calls, 1,246 tokens, ~$0.000 (estimated)
 ```

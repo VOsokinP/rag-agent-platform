@@ -452,3 +452,31 @@ def test_brief_means_the_same_thing_to_both_subcommands(capsys):
     cli.main(["ask", "q", "--brief"], transport=transport_returning(AGENT_PAYLOAD))
     ask_out = capsys.readouterr().out
     assert "Sources:" not in query_out and "Steps:" not in ask_out
+
+
+def test_ask_puts_each_step_result_on_its_own_line(capsys):
+    """One line per call, one per result: `call -> result` on a single line
+    reads as a chain of steps rather than as one step and its outcome."""
+    payload = dict(AGENT_PAYLOAD)
+    payload["steps"] = [
+        {
+            "tool": "search_code",
+            "input": "query=depends",
+            "result": "docs/index.md:64-66",
+        },
+        {
+            "tool": "read_file",
+            "input": "path=fastapi/params.py",
+            "result": "lines 1-40",
+        },
+    ]
+    cli.main(["ask", "q"], transport=transport_returning(payload))
+    lines = capsys.readouterr().out.splitlines()
+
+    numbered = [line for line in lines if line.strip().startswith(("1.", "2."))]
+    assert numbered == [
+        "  1. search_code(query=depends)",
+        "  2. read_file(path=fastapi/params.py)",
+    ], "the call, and only the call, sits on the numbered line"
+    assert "     -> docs/index.md:64-66" in lines
+    assert "     -> lines 1-40" in lines
